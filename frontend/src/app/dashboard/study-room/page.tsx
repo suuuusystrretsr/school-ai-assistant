@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { getWsBaseUrl } from '@/lib/api';
 
 export default function StudyRoomPage() {
   const [roomId, setRoomId] = useState('1');
@@ -12,7 +13,7 @@ export default function StudyRoomPage() {
   const [content, setContent] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
 
-  const wsUrl = useMemo(() => `ws://localhost:8000/ws/rooms/${roomId}?user_id=student`, [roomId]);
+  const wsUrl = useMemo(() => `${getWsBaseUrl()}/ws/rooms/${roomId}?user_id=student`, [roomId]);
 
   function connect() {
     const ws = new WebSocket(wsUrl);

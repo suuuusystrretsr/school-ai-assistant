@@ -12,14 +12,17 @@ class Settings(BaseSettings):
     api_prefix: str = Field(default='/api/v1', alias='API_PREFIX')
     api_url: str = Field(default='http://localhost:8000/api/v1', alias='API_URL')
     site_url: str = Field(default='https://schoolaiassistant.local', alias='SITE_URL')
-    database_url: str = Field(
-        default='postgresql+psycopg2://postgres:postgres@localhost:5432/school_ai_assistant',
-        alias='DATABASE_URL',
-    )
+
+    # SQLite default for fastest free-tier deployment. Postgres is optional later.
+    database_url: str = Field(default='sqlite:///./school_ai_assistant.db', alias='DATABASE_URL')
+
     jwt_secret: str = Field(default='change-me-in-production', alias='JWT_SECRET')
     jwt_algorithm: str = Field(default='HS256', alias='JWT_ALGORITHM')
     jwt_expires_minutes: int = Field(default=10080, alias='JWT_EXPIRES_MINUTES')
-    cors_origins: str = Field(default='http://localhost:3000', alias='CORS_ORIGINS')
+
+    # Comma-separated origins. Use '*' for quick MVP CORS.
+    cors_origins: str = Field(default='*', alias='CORS_ORIGINS')
+
     ai_provider: str = Field(default='mock', alias='AI_PROVIDER')
     ai_model: str = Field(default='mock-edu-v1', alias='AI_MODEL')
     openai_api_key: str | None = Field(default=None, alias='OPENAI_API_KEY')
