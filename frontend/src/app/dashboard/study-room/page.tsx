@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useMemo, useState } from 'react';
 
@@ -12,33 +12,53 @@ export default function StudyRoomPage() {
   const [messages, setMessages] = useState<string[]>([]);
   const [content, setContent] = useState('');
   const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [error, setError] = useState('');
 
   const wsUrl = useMemo(() => `${getWsBaseUrl()}/ws/rooms/${roomId}?user_id=student`, [roomId]);
 
   function connect() {
+    setError('');
     const ws = new WebSocket(wsUrl);
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
+
+    ws.onopen = () => {
+      setConnected(true);
+      setMessages((prev) => [...prev, 'Connected to room.']);
+    };
+
+    ws.onclose = () => {
+      setConnected(false);
+      setMessages((prev) => [...prev, 'Disconnected from room.']);
+    };
+
+    ws.onerror = () => {
+      setError('WebSocket connection failed. Check backend /health and NEXT_PUBLIC_WS_URL.');
+    };
+
     ws.onmessage = (evt) => {
       const payload = JSON.parse(evt.data);
       setMessages((prev) => [...prev, `${payload.user_id}: ${payload.content || payload.event}`]);
     };
+
     setSocket(ws);
   }
 
   function sendMessage() {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setError('Connect to room first.');
+      return;
+    }
     socket.send(JSON.stringify({ type: 'chat', content }));
     setContent('');
   }
 
   return (
     <div className='grid gap-4 lg:grid-cols-3'>
-      <Card className='lg:col-span-2' title='Study Rooms / Group Study'>
+      <Card className='lg:col-span-2' title='Study Rooms / Group Study' subtitle='Live collaboration - beta'>
         <div className='flex gap-2'>
           <input className='rounded-xl border p-2' value={roomId} onChange={(e) => setRoomId(e.target.value)} />
           <Button onClick={connect}>{connected ? 'Connected' : 'Connect WS'}</Button>
         </div>
+        {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
         <div className='mt-4 h-64 overflow-auto rounded-xl border bg-white p-3 text-sm'>
           {messages.map((m, i) => <p key={i}>{m}</p>)}
         </div>

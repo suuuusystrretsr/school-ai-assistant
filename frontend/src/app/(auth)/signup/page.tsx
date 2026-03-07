@@ -17,6 +17,7 @@ export default function SignupPage() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage('Creating account...');
+
     try {
       const res = await fetch(`${API_URL}/auth/signup`, {
         method: 'POST',
@@ -29,8 +30,8 @@ export default function SignupPage() {
       }
       localStorage.setItem('schoolai_token', data.access_token);
       window.location.href = '/dashboard';
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Signup failed');
+    } catch {
+      setMessage('Cannot reach backend API. Open the Render /health URL, wait for wake-up, then retry.');
     }
   }
 
@@ -49,7 +50,7 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           <Button className='w-full'>Create Account</Button>
-          <p className='text-xs text-slate-600'>{message}</p>
+          <p className='text-xs text-rose-700'>{message}</p>
         </form>
         <p className='mt-4 text-sm'>Already have one? <Link href='/login' className='text-brand-700'>Log in</Link></p>
       </Card>

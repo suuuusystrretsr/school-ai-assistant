@@ -28,8 +28,8 @@ export default function LoginPage() {
       }
       localStorage.setItem('schoolai_token', data.access_token);
       window.location.href = '/dashboard';
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Login failed');
+    } catch {
+      setMessage('Cannot reach backend API. Open the Render /health URL, wait for wake-up, then retry.');
     }
   }
 
@@ -47,7 +47,7 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
           <Button className='w-full'>Log In</Button>
-          <p className='text-xs text-slate-600'>{message}</p>
+          <p className='text-xs text-rose-700'>{message}</p>
         </form>
         <p className='mt-4 text-sm'>No account? <Link href='/signup' className='text-brand-700'>Create one</Link></p>
       </Card>

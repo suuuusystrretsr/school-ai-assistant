@@ -1,27 +1,29 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { API_URL } from '@/lib/api';
+import { postWithAuth } from '@/lib/request';
 
 export default function FlashcardsPage() {
   const [notes, setNotes] = useState('Photosynthesis converts light energy into chemical energy. Chlorophyll absorbs light.');
   const [cards, setCards] = useState<any[]>([]);
+  const [error, setError] = useState('');
 
   async function generate() {
-    const token = localStorage.getItem('schoolai_token');
-    const res = await fetch(`${API_URL}/flashcards/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ title: 'Biology Revision', source_text: notes, source_type: 'lecture-notes' }),
-    });
-    const data = await res.json();
-    setCards(data.cards || []);
+    setError('');
+    try {
+      const data = await postWithAuth('/flashcards/generate', {
+        title: 'Biology Revision',
+        source_text: notes,
+        source_type: 'lecture-notes',
+      });
+      setCards(Array.isArray(data.cards) ? data.cards : []);
+    } catch (err) {
+      setCards([]);
+      setError(err instanceof Error ? err.message : 'Failed to generate flashcards.');
+    }
   }
 
   return (
@@ -29,6 +31,7 @@ export default function FlashcardsPage() {
       <Card title='Flashcard Generator' subtitle='Upload notes or paste text to generate spaced-repetition-ready cards'>
         <textarea className='h-36 w-full rounded-xl border p-3' value={notes} onChange={(e) => setNotes(e.target.value)} />
         <Button className='mt-3' onClick={generate}>Generate Flashcards</Button>
+        {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
       </Card>
       <div className='grid gap-3 md:grid-cols-2'>
         {cards.map((card, idx) => (

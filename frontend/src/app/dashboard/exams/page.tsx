@@ -1,15 +1,16 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { API_URL } from '@/lib/api';
+import { postWithAuth } from '@/lib/request';
 
 export default function ExamsPage() {
   const [exam, setExam] = useState<any>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
@@ -17,41 +18,45 @@ export default function ExamsPage() {
     return () => clearInterval(timer);
   }, [secondsLeft]);
 
-  const timerLabel = useMemo(() => `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`, [secondsLeft]);
+  const timerLabel = useMemo(
+    () => `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`,
+    [secondsLeft]
+  );
 
   async function generateExam() {
-    const token = localStorage.getItem('schoolai_token');
-    const res = await fetch(`${API_URL}/exams/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ subject: 'Math', difficulty: 'medium', duration_minutes: 20 }),
-    });
-    const data = await res.json();
-    setExam(data);
-    setSecondsLeft((data.duration_minutes || 20) * 60);
+    setError('');
     setResult(null);
+    try {
+      const data = await postWithAuth('/exams/generate', { subject: 'Math', difficulty: 'medium', duration_minutes: 20 });
+      if (!data?.exam_id || !data?.subject) {
+        throw new Error('Invalid exam response from API.');
+      }
+      setExam(data);
+      setSecondsLeft((data.duration_minutes || 20) * 60);
+    } catch (err) {
+      setExam(null);
+      setError(err instanceof Error ? err.message : 'Failed to generate exam.');
+    }
   }
 
   async function submitExam() {
-    if (!exam) return;
-    const token = localStorage.getItem('schoolai_token');
-    const answers: Record<number, string> = {};
-    exam.questions.forEach((q: any, idx: number) => {
-      answers[idx + 1] = 'B';
-    });
+    if (!exam) {
+      setError('Generate an exam first.');
+      return;
+    }
 
-    const res = await fetch(`${API_URL}/exams/${exam.exam_id}/submit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ answers }),
-    });
-    setResult(await res.json());
+    setError('');
+    try {
+      const answers: Record<number, string> = {};
+      exam.questions?.forEach((q: any) => {
+        answers[q.id] = 'B';
+      });
+      const data = await postWithAuth(`/exams/${exam.exam_id}/submit`, { answers });
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : 'Failed to submit exam.');
+    }
   }
 
   return (
@@ -62,7 +67,9 @@ export default function ExamsPage() {
           <Button variant='secondary' onClick={submitExam}>Submit Exam</Button>
           <span className='rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold'>Timer: {timerLabel}</span>
         </div>
+        {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
       </Card>
+
       {exam ? (
         <Card title={`Exam: ${exam.subject}`} subtitle={`Predicted score: ${exam.predicted_score}%`}>
           <ul className='space-y-2 text-sm'>
@@ -70,6 +77,7 @@ export default function ExamsPage() {
           </ul>
         </Card>
       ) : null}
+
       {result ? (
         <Card title='Performance Review'>
           <p>Actual score: <strong>{result.actual_score}%</strong></p>

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 
@@ -11,7 +11,7 @@ export default function SettingsPage() {
 
   return (
     <div className='space-y-4'>
-      <Card title='Settings' subtitle='User preferences and platform configuration'>
+      <Card title='Settings (Placeholder)' subtitle='This page is currently display-only for MVP.'>
         <div className='space-y-3'>
           <label className='block text-sm'>
             Site URL
@@ -21,7 +21,7 @@ export default function SettingsPage() {
             API URL
             <input className='mt-1 w-full rounded-xl border p-3' value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
           </label>
-          <Button>Save Preferences</Button>
+          <Button disabled className='cursor-not-allowed opacity-70'>Save Preferences (Coming Soon)</Button>
         </div>
       </Card>
 

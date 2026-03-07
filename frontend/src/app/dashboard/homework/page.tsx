@@ -1,10 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { API_URL } from '@/lib/api';
+import { postWithAuth } from '@/lib/request';
 import { ExplanationMode } from '@/types/app';
 
 const modes: ExplanationMode[] = ['eli5', 'normal', 'advanced', 'teacher'];
@@ -14,33 +14,33 @@ export default function HomeworkPage() {
   const [question, setQuestion] = useState('Solve 2x + 8 = 20');
   const [result, setResult] = useState<any>(null);
   const [signalMessage, setSignalMessage] = useState('');
+  const [error, setError] = useState('');
 
   async function solveHomework() {
-    const token = localStorage.getItem('schoolai_token');
-    const res = await fetch(`${API_URL}/homework/solve`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ question_text: question, explanation_mode: mode }),
-    });
-    const data = await res.json();
-    setResult(data);
+    setError('');
+    try {
+      const data = await postWithAuth('/homework/solve', { question_text: question, explanation_mode: mode });
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : 'Failed to solve homework.');
+    }
   }
 
   async function triggerConfusionCheck() {
-    const token = localStorage.getItem('schoolai_token');
-    const res = await fetch(`${API_URL}/analytics/signals`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ activity_seconds: 350, wrong_attempts: 2, answer_changes: 3, tab_switches: 1 }),
-    });
-    const data = await res.json();
-    setSignalMessage(data.suggested_message);
+    setError('');
+    try {
+      const data = await postWithAuth('/analytics/signals', {
+        activity_seconds: 350,
+        wrong_attempts: 2,
+        answer_changes: 3,
+        tab_switches: 1,
+      });
+      setSignalMessage(data.suggested_message || 'No signal response.');
+    } catch (err) {
+      setSignalMessage('');
+      setError(err instanceof Error ? err.message : 'Failed to check confusion signal.');
+    }
   }
 
   return (
@@ -58,7 +58,9 @@ export default function HomeworkPage() {
           <Button onClick={solveHomework}>Solve</Button>
           <Button variant='secondary' onClick={triggerConfusionCheck}>Need Hint Detector</Button>
         </div>
-        <p className='mt-2 text-sm text-slate-600'>{signalMessage}</p>
+        {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
+        {signalMessage ? <p className='mt-2 text-sm text-slate-600'>{signalMessage}</p> : null}
+
         {result ? (
           <div className='mt-4 rounded-xl border bg-white p-4 text-sm'>
             <p><strong>Final Answer:</strong> {result.final_answer}</p>
@@ -72,9 +74,9 @@ export default function HomeworkPage() {
       </Card>
 
       <div className='space-y-4'>
-        <Card title='Whiteboard Solver (MVP)'>
+        <Card title='Whiteboard Solver (MVP Placeholder)'>
           <div className='h-40 rounded-xl border border-dashed p-3 text-sm text-slate-600'>
-            Drawing input area placeholder. API route exists for stroke payload ingestion.
+            Drawing input area placeholder. Handwriting recognition is intentionally not implemented yet.
           </div>
         </Card>
         <Card title='Progressive Hints'>

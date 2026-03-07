@@ -1,4 +1,4 @@
-﻿import Link from 'next/link';
+import Link from 'next/link';
 
 import { MarketingFooter } from '@/components/layout/marketing-footer';
 import { MarketingHeader } from '@/components/layout/marketing-header';
@@ -33,9 +33,9 @@ export default function LandingPage() {
             <Link href='/signup'>
               <Button className='px-6 py-3 text-base'>Create Free Account</Button>
             </Link>
-            <Link href='/dashboard'>
+            <Link href='/dashboard/homework'>
               <Button variant='secondary' className='px-6 py-3 text-base'>
-                View Product
+                View Product (Homework)
               </Button>
             </Link>
           </div>
