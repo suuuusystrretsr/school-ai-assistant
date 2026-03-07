@@ -1,0 +1,33 @@
+﻿services:
+  - type: web
+    name: school-ai-assistant-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_NAME
+        value: SCHOOL AI ASSISTANT API
+      - key: ENV
+        value: production
+      - key: API_PREFIX
+        value: /api/v1
+      - key: API_URL
+        value: https://school-ai-assistant-api.onrender.com/api/v1
+      - key: SITE_URL
+        value: https://schoolaiassistant.vercel.app
+      - key: CORS_ORIGINS
+        value: '*'
+      - key: DATABASE_URL
+        value: sqlite:///./school_ai_assistant.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRES_MINUTES
+        value: 10080
+      - key: AI_PROVIDER
+        value: mock
+      - key: AI_MODEL
+        value: mock-edu-v1
