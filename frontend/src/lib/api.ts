@@ -1,4 +1,5 @@
-﻿const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_URL = '/api/proxy';
+const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 function normalizeBase(url: string) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
@@ -10,8 +11,8 @@ export function getWsBaseUrl() {
     return normalizeBase(explicitWs);
   }
 
-  // Derive websocket base from API URL, stripping /api/v1 if present.
-  const cleanApi = normalizeBase(API_URL).replace(/\/api\/v1$/, '');
+  // Derive websocket base from direct API URL, stripping /api/v1 if present.
+  const cleanApi = normalizeBase(DIRECT_API_URL).replace(/\/api\/v1$/, '');
   if (cleanApi.startsWith('https://')) return cleanApi.replace('https://', 'wss://');
   if (cleanApi.startsWith('http://')) return cleanApi.replace('http://', 'ws://');
   return cleanApi;
@@ -33,4 +34,4 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   return res.json() as Promise<T>;
 }
 
-export { API_URL };
+export { API_URL, DIRECT_API_URL };

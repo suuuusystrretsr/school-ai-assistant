@@ -24,14 +24,26 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, full_name: fullName, password }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(toReadableError(data?.detail, 'Signup failed'));
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
       }
+
+      if (!res.ok) {
+        throw new Error(toReadableError(data?.detail, `Signup failed (${res.status})`));
+      }
+
       localStorage.setItem('schoolai_token', data.access_token);
       window.location.href = '/dashboard';
-    } catch {
-      setMessage('Cannot reach backend API. Open the Render /health URL, wait for wake-up, then retry.');
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setMessage('Cannot reach backend API. Open the Render /health URL, wait for wake-up, then retry.');
+        return;
+      }
+      setMessage(err instanceof Error ? err.message : 'Signup failed.');
     }
   }
 
