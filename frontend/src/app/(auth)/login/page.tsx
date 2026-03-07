@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
@@ -6,6 +6,7 @@ import { FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { API_URL } from '@/lib/api';
+import { toReadableError } from '@/lib/error-message';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('student@example.com');
@@ -22,7 +23,9 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      if (!res.ok) {
+        throw new Error(toReadableError(data?.detail, 'Login failed'));
+      }
       localStorage.setItem('schoolai_token', data.access_token);
       window.location.href = '/dashboard';
     } catch (err) {

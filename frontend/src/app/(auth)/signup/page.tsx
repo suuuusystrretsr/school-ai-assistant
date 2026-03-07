@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
@@ -6,6 +6,7 @@ import { FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { API_URL } from '@/lib/api';
+import { toReadableError } from '@/lib/error-message';
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('Student Name');
@@ -23,7 +24,9 @@ export default function SignupPage() {
         body: JSON.stringify({ email, full_name: fullName, password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Signup failed');
+      if (!res.ok) {
+        throw new Error(toReadableError(data?.detail, 'Signup failed'));
+      }
       localStorage.setItem('schoolai_token', data.access_token);
       window.location.href = '/dashboard';
     } catch (err) {
