@@ -1,0 +1,66 @@
+﻿'use client';
+
+import { useMemo, useState } from 'react';
+
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+
+export default function StudyRoomPage() {
+  const [roomId, setRoomId] = useState('1');
+  const [connected, setConnected] = useState(false);
+  const [messages, setMessages] = useState<string[]>([]);
+  const [content, setContent] = useState('');
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+
+  const wsUrl = useMemo(() => `ws://localhost:8000/ws/rooms/${roomId}?user_id=student`, [roomId]);
+
+  function connect() {
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => setConnected(true);
+    ws.onclose = () => setConnected(false);
+    ws.onmessage = (evt) => {
+      const payload = JSON.parse(evt.data);
+      setMessages((prev) => [...prev, `${payload.user_id}: ${payload.content || payload.event}`]);
+    };
+    setSocket(ws);
+  }
+
+  function sendMessage() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'chat', content }));
+    setContent('');
+  }
+
+  return (
+    <div className='grid gap-4 lg:grid-cols-3'>
+      <Card className='lg:col-span-2' title='Study Rooms / Group Study'>
+        <div className='flex gap-2'>
+          <input className='rounded-xl border p-2' value={roomId} onChange={(e) => setRoomId(e.target.value)} />
+          <Button onClick={connect}>{connected ? 'Connected' : 'Connect WS'}</Button>
+        </div>
+        <div className='mt-4 h-64 overflow-auto rounded-xl border bg-white p-3 text-sm'>
+          {messages.map((m, i) => <p key={i}>{m}</p>)}
+        </div>
+        <div className='mt-3 flex gap-2'>
+          <input className='flex-1 rounded-xl border p-2' value={content} onChange={(e) => setContent(e.target.value)} />
+          <Button onClick={sendMessage}>Send</Button>
+        </div>
+      </Card>
+
+      <div className='space-y-4'>
+        <Card title='Room Rules'>
+          <p className='text-sm text-slate-700'>Host plus up to 4 invited users (max 5 participants).</p>
+        </Card>
+        <Card title='Collab Tools'>
+          <ul className='list-disc pl-5 text-sm text-slate-700'>
+            <li>Live chat</li>
+            <li>Presence indicator</li>
+            <li>Shared session notes</li>
+            <li>Group task board</li>
+            <li>AI group tutor</li>
+          </ul>
+        </Card>
+      </div>
+    </div>
+  );
+}
