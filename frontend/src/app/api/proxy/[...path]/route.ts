@@ -9,8 +9,18 @@ function shouldIncludeBody(method: string): boolean {
   return !['GET', 'HEAD'].includes(method.toUpperCase());
 }
 
+function getBackendRoot(base: string): string {
+  return base.replace(/\/api\/v1$/, '');
+}
+
 function buildTargetUrl(req: NextRequest, path: string[]): string {
   const joinedPath = path.join('/');
+
+  // Convenience health pass-through even when BACKEND_API_URL includes /api/v1.
+  if (joinedPath === 'health') {
+    return `${getBackendRoot(backendBase)}/health${req.nextUrl.search}`;
+  }
+
   return `${backendBase}/${joinedPath}${req.nextUrl.search}`;
 }
 
@@ -28,6 +38,8 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   headers.delete('content-length');
 
   const targetUrl = buildTargetUrl(req, path);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
 
   try {
     const upstream = await fetch(targetUrl, {
@@ -36,6 +48,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
       body: shouldIncludeBody(req.method) ? await req.arrayBuffer() : undefined,
       redirect: 'manual',
       cache: 'no-store',
+      signal: controller.signal,
     });
 
     const responseHeaders = new Headers(upstream.headers);
@@ -46,11 +59,20 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
       statusText: upstream.statusText,
       headers: responseHeaders,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return NextResponse.json(
+        { detail: 'Backend request timed out (25s). Wake Render and retry.' },
+        { status: 504 },
+      );
+    }
+
     return NextResponse.json(
       { detail: 'Cannot reach backend service from Vercel function.' },
       { status: 502 },
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
