@@ -471,7 +471,7 @@ class HuggingFaceProvider(MockAIProvider):
                     break
             return merged[:target_count]
 
-        token_budget = min(1800, max(700, target_count * 220))
+        token_budget = min(900, max(420, target_count * 130))
         data = self._ask_json(
             'Generate realistic multiple-choice exam questions with strong distractors and one correct option.',
             (
@@ -498,6 +498,27 @@ class HuggingFaceProvider(MockAIProvider):
             parsed = self._extract_json_block(raw) if isinstance(raw, str) and raw.strip() else None
             out = merge_unique(out, normalize(parsed))
 
+        # Final reliability path: generate one question at a time if batch generation is weak.
+        if len(out) < target_count:
+            remaining = target_count - len(out)
+            max_single_calls = min(remaining, 6)
+            for idx in range(max_single_calls):
+                single = self._ask_json(
+                    'Generate exactly one strong multiple-choice exam question.',
+                    (
+                        'Return JSON object with key "questions" and exactly one item. '
+                        'Item shape: {"prompt": str, "choices": [4 strings], "correct_answer": "A|B|C|D", "explanation": str}.\n'
+                        f'Subject: {subject}\nTopic: {topic}\nDifficulty: {difficulty}\nTeacher style: {style}\n'
+                        f'Question number: {len(out) + idx + 1} of {target_count}'
+                    ),
+                    max_new_tokens=380,
+                )
+                out = merge_unique(out, normalize(single))
+                if len(out) >= target_count:
+                    break
+
         return out if out else None
+
+
 
 

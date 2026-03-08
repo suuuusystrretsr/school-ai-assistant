@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter
+from fastapi import APIRouter
 
 from app.services.ai.factory import get_ai_provider
 
@@ -29,3 +29,40 @@ def ai_debug() -> dict:
         'hf_last_error': getattr(provider, 'last_error', ''),
     }
 
+
+@router.get('/ai-exam')
+def ai_exam_debug(
+    subject: str = 'Math',
+    topic: str = 'quadratics',
+    difficulty: str = 'medium',
+    style: str = 'exam-board style',
+    question_count: int = 5,
+) -> dict:
+    provider = get_ai_provider()
+    fn = getattr(provider, 'generate_exam_questions', None)
+
+    if not callable(fn):
+        return {
+            'provider': provider.__class__.__name__,
+            'ok': False,
+            'error': 'Provider does not implement generate_exam_questions',
+        }
+
+    try:
+        out = fn(subject, topic, difficulty, style, question_count)
+    except Exception as exc:  # pragma: no cover
+        return {
+            'provider': provider.__class__.__name__,
+            'ok': False,
+            'error': str(exc),
+            'hf_last_error': getattr(provider, 'last_error', ''),
+        }
+
+    questions = out if isinstance(out, list) else []
+    return {
+        'provider': provider.__class__.__name__,
+        'ok': len(questions) > 0,
+        'count': len(questions),
+        'sample': questions[0] if questions else None,
+        'hf_last_error': getattr(provider, 'last_error', ''),
+    }
