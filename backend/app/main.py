@@ -40,7 +40,8 @@ def on_startup() -> None:
 def health() -> dict:
     with SessionLocal() as db:
         db.execute(text('SELECT 1'))
-    return {'status': 'ok', 'app': settings.app_name}
+    effective_provider = 'huggingface' if settings.ai_provider == 'huggingface' and settings.hf_api_key and settings.hf_model_id else 'mock'
+    return {'status': 'ok', 'app': settings.app_name, 'ai_provider': settings.ai_provider, 'effective_ai_provider': effective_provider}
 @app.get('/')
 def root() -> dict:
     return {'status': 'ok', 'app': settings.app_name, 'health': '/health', 'docs': '/docs'}
@@ -78,3 +79,5 @@ async def room_ws(websocket: WebSocket, room_id: int):
             room_id,
             {'type': 'presence', 'event': 'leave', 'room_id': room_id, 'user_id': user_id},
         )
+
+

@@ -9,8 +9,10 @@ from app.db.session import get_db
 from app.models.exam import ExamQuestion, ExamSimulation
 from app.models.user import User
 from app.schemas.exam import ExamGenerateRequest, ExamGenerateResponse, ExamQuestionReview, ExamResultResponse, ExamSubmitRequest
+from app.services.ai.factory import get_ai_provider
 
 router = APIRouter(prefix='/exams', tags=['exams'])
+ai = get_ai_provider()
 
 
 STYLE_LIBRARY = {
@@ -115,6 +117,12 @@ def _question_pattern(subject: str, topic: str, difficulty: str, style: str, idx
 
 
 def _build_question_bank(subject: str, topic: str, difficulty: str, style: str, question_count: int) -> list[dict]:
+    ai_questions_fn = getattr(ai, 'generate_exam_questions', None)
+    if callable(ai_questions_fn):
+        generated = ai_questions_fn(subject, topic, difficulty, style, question_count)
+        if isinstance(generated, list) and len(generated) >= 3:
+            return generated[:question_count]
+
     return [_question_pattern(subject, topic, difficulty, style, idx) for idx in range(question_count)]
 
 
@@ -248,3 +256,5 @@ def submit_exam(exam_id: int, payload: ExamSubmitRequest, user: User = Depends(g
         confidence_gap=confidence_gap,
         outcome_simulation=outcome_simulation,
     )
+
+

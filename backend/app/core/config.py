@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     ai_provider: str = Field(default='mock', alias='AI_PROVIDER')
     ai_model: str = Field(default='mock-edu-v1', alias='AI_MODEL')
     openai_api_key: str | None = Field(default=None, alias='OPENAI_API_KEY')
+    hf_api_key: str | None = Field(default=None, alias='HF_API_KEY')
+    hf_model_id: str = Field(default='Qwen/Qwen2.5-7B-Instruct', alias='HF_MODEL_ID')
+    hf_timeout_seconds: int = Field(default=35, alias='HF_TIMEOUT_SECONDS')
+    hf_max_new_tokens: int = Field(default=500, alias='HF_MAX_NEW_TOKENS')
 
     @property
     def runtime_database_url(self) -> str:
@@ -39,3 +43,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+

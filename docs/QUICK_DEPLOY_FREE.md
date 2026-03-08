@@ -1,4 +1,4 @@
-﻿# Quick Free Deployment Guide (GitHub + Render + Vercel)
+# Quick Free Deployment Guide (GitHub + Render + Vercel)
 
 This guide gets you a public website your friends can use.
 
@@ -36,8 +36,10 @@ Set or verify:
 - `JWT_SECRET=<click Generate in Render or set random long string>`
 - `JWT_ALGORITHM=HS256`
 - `JWT_EXPIRES_MINUTES=10080`
-- `AI_PROVIDER=mock`
+- `AI_PROVIDER=mock` (or `huggingface`)
 - `AI_MODEL=mock-edu-v1`
+- `HF_API_KEY=<YOUR_HF_TOKEN>`
+- `HF_MODEL_ID=Qwen/Qwen2.5-7B-Instruct`
 
 Test backend:
 - `https://<YOUR-RENDER-SERVICE>.onrender.com/health`
@@ -88,3 +90,6 @@ Redeploy backend once after updating env vars.
 - Switch `DATABASE_URL` to managed Postgres.
 - Add production LLM provider in AI service factory.
 - Add persistent storage for uploaded files.
+
+
+

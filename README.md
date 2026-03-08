@@ -1,4 +1,4 @@
-﻿# SCHOOL AI ASSISTANT (Fast Public MVP)
+# SCHOOL AI ASSISTANT (Fast Public MVP)
 
 This repo is now optimized for **fast free deployment**:
 - Frontend: **Vercel free tier**
@@ -38,7 +38,8 @@ Follow:
 ## Platform Config Files Included
 
 - `render.yaml` (Render backend blueprint)
-- `frontend/vercel.json` (Vercel Next.js config)
+- `frontend/next.config.mjs` (Vercel Next.js config)
+- `frontend/src/app/api/proxy/[...path]/route.ts` (Vercel backend proxy)
 - `.env.example`, `backend/.env.example`, `frontend/.env.example`
 
 ## Notes
@@ -46,6 +47,18 @@ Follow:
 - SQLite is used by default for fastest launch.
 - Data on free backend instances may reset on restarts/redeploys.
 - WebSocket study room still works; if host limits WebSockets, core app remains usable.
+
+## Enable Free Smarter AI (Hugging Face)
+
+Set these in **Render backend env vars**:
+- `AI_PROVIDER=huggingface`
+- `HF_API_KEY=<your_hf_token>`
+- `HF_MODEL_ID=Qwen/Qwen2.5-7B-Instruct`
+- `HF_TIMEOUT_SECONDS=35`
+- `HF_MAX_NEW_TOKENS=500`
+
+After redeploy, verify:
+- `https://<your-render-app>/health` returns `effective_ai_provider: huggingface`
 
 ## Upgrade Later
 

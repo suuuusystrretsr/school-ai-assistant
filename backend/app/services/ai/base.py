@@ -1,4 +1,4 @@
-﻿from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod
 
 
 class AIProvider(ABC):
@@ -41,3 +41,14 @@ class AIProvider(ABC):
     @abstractmethod
     def scan_knowledge_gaps(self, profile: dict) -> dict:
         raise NotImplementedError
+
+    def generate_exam_questions(
+        self,
+        subject: str,
+        topic: str,
+        difficulty: str,
+        style: str,
+        question_count: int,
+    ) -> list[dict] | None:
+        return None
+

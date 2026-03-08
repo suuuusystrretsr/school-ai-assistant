@@ -206,3 +206,31 @@ class MockAIProvider(AIProvider):
                 {'topic': 'Core vocabulary', 'set': 'Concept Drill 1'},
             ],
         }
+
+    def generate_exam_questions(
+        self,
+        subject: str,
+        topic: str,
+        difficulty: str,
+        style: str,
+        question_count: int,
+    ) -> list[dict] | None:
+        level = difficulty.lower().strip()
+        out: list[dict] = []
+        for idx in range(question_count):
+            n = idx + 1
+            out.append(
+                {
+                    'prompt': f'[{style}] {topic} question {n} ({level})',
+                    'choices': [
+                        'Option A',
+                        'Option B',
+                        'Option C',
+                        'Option D',
+                    ],
+                    'correct_answer': ['A', 'B', 'C', 'D'][idx % 4],
+                    'explanation': f'Explanation for {topic} question {n} in {subject}.',
+                }
+            )
+        return out
+
