@@ -379,9 +379,18 @@ class HuggingFaceProvider(MockAIProvider):
         style: str,
         question_count: int,
     ) -> list[dict] | None:
+        target_count = max(1, min(25, int(question_count or 5)))
+
         def normalize(payload: Any) -> list[dict]:
             if isinstance(payload, dict):
-                questions = payload.get('questions') if isinstance(payload.get('questions'), list) else payload.get('items')
+                if isinstance(payload.get('questions'), list):
+                    questions = payload.get('questions')
+                elif isinstance(payload.get('items'), list):
+                    questions = payload.get('items')
+                elif isinstance(payload.get('data'), list):
+                    questions = payload.get('data')
+                else:
+                    questions = None
             elif isinstance(payload, list):
                 questions = payload
             else:
@@ -391,25 +400,41 @@ class HuggingFaceProvider(MockAIProvider):
                 return []
 
             out: list[dict] = []
-            for item in questions[:question_count]:
+            for item in questions[:target_count]:
                 if not isinstance(item, dict):
                     continue
 
-                prompt = str(item.get('prompt') or item.get('question') or '').strip()
+                prompt = str(item.get('prompt') or item.get('question') or item.get('stem') or '').strip()
                 explanation = str(item.get('explanation') or item.get('rationale') or '').strip()
-                raw_choices = item.get('choices') if isinstance(item.get('choices'), list) else item.get('options')
-                choices = [str(choice).strip() for choice in raw_choices] if isinstance(raw_choices, list) else []
-                choices = [choice for choice in choices if choice][:4]
+
+                raw_choices: Any
+                if isinstance(item.get('choices'), list):
+                    raw_choices = item.get('choices')
+                elif isinstance(item.get('options'), list):
+                    raw_choices = item.get('options')
+                elif isinstance(item.get('options'), dict):
+                    opt_map = item.get('options')
+                    raw_choices = [opt_map.get(k) for k in ['A', 'B', 'C', 'D']]
+                else:
+                    raw_choices = []
+
+                choices = [str(choice).strip() for choice in raw_choices if str(choice).strip()]
+                choices = choices[:4]
                 while len(choices) < 4:
                     choices.append(f'Option {chr(65 + len(choices))}')
 
-                raw_answer = str(item.get('correct_answer') or item.get('answer') or '').strip()
+                raw_answer = str(item.get('correct_answer') or item.get('answer') or item.get('correct') or '').strip()
                 upper_answer = raw_answer.upper()
 
                 if upper_answer in {'A', 'B', 'C', 'D'}:
                     correct = upper_answer
+                elif upper_answer and upper_answer[0] in {'A', 'B', 'C', 'D'} and (len(upper_answer) == 1 or upper_answer[1] in {')', '.', ':', ' '}):
+                    correct = upper_answer[0]
                 elif raw_answer in choices:
                     correct = chr(65 + choices.index(raw_answer))
+                elif any(raw_answer.lower() == choice.lower() for choice in choices):
+                    match_idx = next(i for i, choice in enumerate(choices) if raw_answer.lower() == choice.lower())
+                    correct = chr(65 + match_idx)
                 elif raw_answer.isdigit() and 1 <= int(raw_answer) <= 4:
                     correct = chr(64 + int(raw_answer))
                 else:
@@ -431,32 +456,48 @@ class HuggingFaceProvider(MockAIProvider):
 
             return out
 
-        token_budget = min(1000, max(550, question_count * 140))
+        def merge_unique(primary: list[dict], secondary: list[dict]) -> list[dict]:
+            seen = {q.get('prompt', '').strip().lower() for q in primary if isinstance(q, dict)}
+            merged = list(primary)
+            for item in secondary:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get('prompt') or '').strip().lower()
+                if not key or key in seen:
+                    continue
+                merged.append(item)
+                seen.add(key)
+                if len(merged) >= target_count:
+                    break
+            return merged[:target_count]
+
+        token_budget = min(1800, max(700, target_count * 220))
         data = self._ask_json(
             'Generate realistic multiple-choice exam questions with strong distractors and one correct option.',
             (
                 'Return JSON object {"questions": [{"prompt": str, "choices": [4 strings], "correct_answer": "A|B|C|D", "explanation": str}]}. '
-                'Questions must be specific to topic, not generic placeholders. '
-                f'Create exactly {question_count} questions.\n'
+                'Questions must be specific to topic and age-appropriate; avoid generic placeholders. '
+                f'Create exactly {target_count} questions.\n'
                 f'Subject: {subject}\nTopic: {topic}\nDifficulty: {difficulty}\nTeacher style: {style}'
             ),
             max_new_tokens=token_budget,
         )
 
         out = normalize(data)
-        if len(out) >= 3:
-            return out
 
-        raw = self._invoke_model(
-            (
-                'Return ONLY a JSON array. No markdown. '
-                f'Create {question_count} multiple-choice questions for {subject} on {topic} ({difficulty}, style: {style}). '
-                'Each item must include prompt, choices(4), correct_answer(A-D), explanation.'
-            ),
-            max_new_tokens=token_budget,
-        )
+        if len(out) < target_count:
+            raw = self._invoke_model(
+                (
+                    'Return ONLY a JSON array. No markdown. '
+                    f'Create {target_count} high-quality multiple-choice questions for {subject} on {topic} '
+                    f'({difficulty}, style: {style}). '
+                    'Each item must include prompt, choices(4), correct_answer(A-D), explanation.'
+                ),
+                max_new_tokens=token_budget,
+            )
+            parsed = self._extract_json_block(raw) if isinstance(raw, str) and raw.strip() else None
+            out = merge_unique(out, normalize(parsed))
 
-        parsed = self._extract_json_block(raw) if isinstance(raw, str) and raw.strip() else None
-        out = normalize(parsed)
-        return out if len(out) >= 3 else None
+        return out if out else None
+
 

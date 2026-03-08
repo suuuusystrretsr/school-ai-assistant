@@ -12,7 +12,6 @@ from app.schemas.exam import ExamGenerateRequest, ExamGenerateResponse, ExamQues
 from app.services.ai.factory import get_ai_provider
 
 router = APIRouter(prefix='/exams', tags=['exams'])
-ai = get_ai_provider()
 
 
 STYLE_LIBRARY = {
@@ -117,17 +116,26 @@ def _question_pattern(subject: str, topic: str, difficulty: str, style: str, idx
 
 
 def _build_question_bank(subject: str, topic: str, difficulty: str, style: str, question_count: int) -> list[dict]:
-    ai_questions_fn = getattr(ai, 'generate_exam_questions', None)
+    provider = get_ai_provider()
+    ai_questions_fn = getattr(provider, 'generate_exam_questions', None)
+    ai_items: list[dict] = []
+
     if callable(ai_questions_fn):
         try:
             generated = ai_questions_fn(subject, topic, difficulty, style, question_count)
-            if isinstance(generated, list) and len(generated) >= 3:
-                return generated[:question_count]
+            if isinstance(generated, list):
+                ai_items = [item for item in generated if isinstance(item, dict)]
         except Exception:
             # Never fail exam generation because external AI failed.
             pass
 
-    return [_question_pattern(subject, topic, difficulty, style, idx) for idx in range(question_count)]
+    if len(ai_items) >= question_count:
+        return ai_items[:question_count]
+
+    # Keep any valid AI questions and fill only missing items with deterministic fallback.
+    fallback_needed = max(0, question_count - len(ai_items))
+    fallback_items = [_question_pattern(subject, topic, difficulty, style, idx) for idx in range(len(ai_items), len(ai_items) + fallback_needed)]
+    return ai_items + fallback_items
 
 
 def _sanitize_question_item(item: dict, fallback: dict) -> dict:
@@ -286,3 +294,6 @@ def submit_exam(exam_id: int, payload: ExamSubmitRequest, user: User = Depends(g
         confidence_gap=confidence_gap,
         outcome_simulation=outcome_simulation,
     )
+
+
+
