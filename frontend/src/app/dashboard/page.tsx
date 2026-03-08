@@ -134,7 +134,7 @@ export default function DashboardPage() {
             <div className='mt-3 rounded-xl border bg-slate-50 p-3 text-xs'>
               <p className='font-semibold'>Dependency Scanner</p>
               {intel.knowledge_dependencies.slice(0, 2).map((dep: any, idx: number) => (
-                <p key={idx} className='mt-1'>{dep.weak_topic} -> affects {(dep.impacts || []).join(', ') || 'nearby topics'}</p>
+                <p key={idx} className='mt-1'>{dep.weak_topic}{' -> '}affects {(dep.impacts || []).join(', ') || 'nearby topics'}</p>
               ))}
             </div>
           ) : null}
@@ -192,3 +192,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
