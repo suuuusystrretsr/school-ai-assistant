@@ -9,6 +9,7 @@ const configuredBackend = sanitizeUrl(process.env.BACKEND_API_URL) || sanitizeUr
 const backendBase = configuredBackend.endsWith('/') ? configuredBackend.slice(0, -1) : configuredBackend;
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 function shouldIncludeBody(method: string): boolean {
   return !['GET', 'HEAD'].includes(method.toUpperCase());
@@ -20,26 +21,21 @@ function getBackendRoot(base: string): string {
 
 function buildTargetUrl(req: NextRequest, path: string[]): string {
   const joinedPath = path.join('/');
-
   if (joinedPath === 'health') {
     return `${getBackendRoot(backendBase)}/health${req.nextUrl.search}`;
   }
-
   return `${backendBase}/${joinedPath}${req.nextUrl.search}`;
 }
 
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   if (!backendBase) {
-    return NextResponse.json(
-      { detail: 'Missing BACKEND_API_URL or NEXT_PUBLIC_API_URL on Vercel.' },
-      { status: 500 },
-    );
+    return NextResponse.json({ detail: 'Missing BACKEND_API_URL or NEXT_PUBLIC_API_URL on Vercel.' }, { status: 500 });
   }
 
   const host = req.headers.get('host') || '';
   if (host && backendBase.includes(host)) {
     return NextResponse.json(
-      { detail: 'BACKEND_API_URL is pointing to this Vercel app. Set it to Render API URL.' },
+      { detail: 'BACKEND_API_URL points to this Vercel app. Set it to Render API URL.' },
       { status: 500 },
     );
   }
@@ -48,6 +44,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   headers.delete('host');
   headers.delete('connection');
   headers.delete('content-length');
+  headers.delete('accept-encoding');
 
   const targetUrl = buildTargetUrl(req, path);
   const controller = new AbortController();
@@ -58,31 +55,26 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
       method: req.method,
       headers,
       body: shouldIncludeBody(req.method) ? await req.arrayBuffer() : undefined,
-      redirect: 'manual',
+      redirect: 'follow',
       cache: 'no-store',
       signal: controller.signal,
     });
 
-    const responseHeaders = new Headers(upstream.headers);
-    responseHeaders.delete('content-encoding');
+    const bodyText = await upstream.text();
+    const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
 
-    return new NextResponse(upstream.body, {
+    return new NextResponse(bodyText, {
       status: upstream.status,
-      statusText: upstream.statusText,
-      headers: responseHeaders,
+      headers: {
+        'content-type': contentType,
+        'cache-control': 'no-store',
+      },
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return NextResponse.json(
-        { detail: 'Backend request timed out (15s). Wake Render and retry.' },
-        { status: 504 },
-      );
+      return NextResponse.json({ detail: 'Backend request timed out (15s). Wake Render and retry.' }, { status: 504 });
     }
-
-    return NextResponse.json(
-      { detail: 'Cannot reach backend service from Vercel function.' },
-      { status: 502 },
-    );
+    return NextResponse.json({ detail: 'Cannot reach backend service from Vercel function.' }, { status: 502 });
   } finally {
     clearTimeout(timeout);
   }
