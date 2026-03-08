@@ -13,7 +13,7 @@ class HuggingFaceProvider(MockAIProvider):
         self.model_id = (self.settings.hf_model_id or '').strip()
         self.timeout = max(10, int(self.settings.hf_timeout_seconds))
         self.max_new_tokens = max(128, int(self.settings.hf_max_new_tokens))
-        self.endpoint = f'https://api-inference.huggingface.co/models/{self.model_id}' if self.model_id else ''
+        self.endpoint = 'https://router.huggingface.co/v1/chat/completions' if self.model_id else ''
         self.last_error = ''
 
     def _invoke_model(self, prompt: str, max_new_tokens: int | None = None) -> str | None:
@@ -23,16 +23,13 @@ class HuggingFaceProvider(MockAIProvider):
             return None
 
         payload = {
-            'inputs': prompt,
-            'parameters': {
-                'max_new_tokens': int(max_new_tokens or self.max_new_tokens),
-                'temperature': 0.35,
-                'return_full_text': False,
-            },
-            'options': {
-                'wait_for_model': True,
-                'use_cache': False,
-            },
+            'model': self.model_id,
+            'messages': [
+                {'role': 'user', 'content': prompt},
+            ],
+            'temperature': 0.35,
+            'max_tokens': int(max_new_tokens or self.max_new_tokens),
+            'stream': False,
         }
 
         req = request.Request(
@@ -40,6 +37,7 @@ class HuggingFaceProvider(MockAIProvider):
             data=json.dumps(payload).encode('utf-8'),
             headers={
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
                 'Authorization': f'Bearer {self.api_key}',
             },
             method='POST',
@@ -69,10 +67,19 @@ class HuggingFaceProvider(MockAIProvider):
             if data.get('error'):
                 self.last_error = str(data.get('error'))
                 return None
+            if isinstance(data.get('choices'), list) and data.get('choices'):
+                first_choice = data['choices'][0]
+                if isinstance(first_choice, dict):
+                    message = first_choice.get('message')
+                    if isinstance(message, dict) and isinstance(message.get('content'), str):
+                        return message['content'].strip()
+                    if isinstance(first_choice.get('text'), str):
+                        return first_choice['text'].strip()
             if isinstance(data.get('generated_text'), str):
                 return data['generated_text'].strip()
             if isinstance(data.get('text'), str):
                 return data['text'].strip()
+            self.last_error = 'No usable text in HF response payload'
             return None
 
         if isinstance(data, list) and data:
@@ -407,6 +414,10 @@ class HuggingFaceProvider(MockAIProvider):
             )
 
         return out if len(out) >= 3 else None
+
+
+
+
 
 
 
