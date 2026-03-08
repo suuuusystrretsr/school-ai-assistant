@@ -1,4 +1,9 @@
-const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+function sanitizeUrl(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw.trim().replace(/^['\"]+|['\"]+$/g, '');
+}
+
+const DIRECT_API_URL = sanitizeUrl(process.env.NEXT_PUBLIC_API_URL);
 const API_URL = DIRECT_API_URL || '/api/proxy';
 
 function normalizeBase(url: string) {
@@ -6,7 +11,7 @@ function normalizeBase(url: string) {
 }
 
 export function getWsBaseUrl() {
-  const explicitWs = process.env.NEXT_PUBLIC_WS_URL;
+  const explicitWs = sanitizeUrl(process.env.NEXT_PUBLIC_WS_URL);
   if (explicitWs) {
     return normalizeBase(explicitWs);
   }
