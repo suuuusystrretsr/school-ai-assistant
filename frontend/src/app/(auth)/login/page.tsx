@@ -8,6 +8,16 @@ import { Card } from '@/components/ui/card';
 import { API_URL } from '@/lib/api';
 import { toReadableError } from '@/lib/error-message';
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs = 20000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('student@example.com');
   const [password, setPassword] = useState('password123');
@@ -18,7 +28,7 @@ export default function LoginPage() {
     setMessage('Signing in...');
 
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetchWithTimeout(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -38,6 +48,10 @@ export default function LoginPage() {
       localStorage.setItem('schoolai_token', data.access_token);
       window.location.href = '/dashboard';
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setMessage('Login request timed out (20s). Wake Render /health and retry.');
+        return;
+      }
       if (err instanceof TypeError) {
         setMessage('Cannot reach backend API. Open the Render /health URL, wait for wake-up, then retry.');
         return;
