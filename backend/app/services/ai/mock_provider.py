@@ -112,7 +112,7 @@ class MockAIProvider(AIProvider):
     def tutor_chat(self, message: str, subject: str, mode: str) -> dict:
         seed = message.strip()[:120]
         return {
-            'reply': f'Let's learn {subject} step-by-step. First concept from your prompt: "{seed}". I will explain, then quiz you.',
+            'reply': f"Let's learn {subject} step-by-step. First concept from your prompt: \"{seed}\". I will explain, then quiz you.",
             'follow_up_question': f'In one sentence, what is the key idea behind "{seed[:50]}"?',
             'mini_quiz': [
                 {'question': f'{subject}: quick check #1 on the core idea', 'answer': 'State the rule in your own words.'},
@@ -182,3 +182,4 @@ class MockAIProvider(AIProvider):
                 {'topic': 'Core vocabulary', 'set': 'Concept Drill 1'},
             ],
         }
+
