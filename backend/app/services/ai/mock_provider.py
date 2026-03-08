@@ -216,21 +216,138 @@ class MockAIProvider(AIProvider):
         question_count: int,
     ) -> list[dict] | None:
         level = difficulty.lower().strip()
+        s = subject.lower().strip()
+
+        def q(prompt: str, choices: list[str], correct: str, explanation: str) -> dict:
+            return {
+                'prompt': f'[{style}] {prompt}',
+                'choices': choices,
+                'correct_answer': correct,
+                'explanation': explanation,
+            }
+
+        templates: list[dict]
+        if 'math' in s:
+            templates = [
+                q(
+                    f'For {topic}, what is the most reliable first step?',
+                    [
+                        'Identify known values, unknowns, and constraints.',
+                        'Guess an answer and verify later.',
+                        'Skip setup and do random operations.',
+                        'Only memorize the final formula name.',
+                    ],
+                    'A',
+                    'Structured setup reduces algebra and sign errors before solving.',
+                ),
+                q(
+                    f'Which error most commonly causes wrong answers in {topic}?',
+                    [
+                        'Checking units and signs at the end.',
+                        'Applying a rule without checking conditions.',
+                        'Writing down givens clearly.',
+                        'Estimating a sanity-check range.',
+                    ],
+                    'B',
+                    'Using a rule out of context is a frequent source of incorrect results.',
+                ),
+                q(
+                    f'What review method best strengthens {topic} retention?',
+                    [
+                        'Read notes once and move on.',
+                        'Do only easy questions repeatedly.',
+                        'Use spaced recall plus mixed practice.',
+                        'Skip review and rely on intuition.',
+                    ],
+                    'C',
+                    'Spaced retrieval and mixed problems build durable recall and transfer.',
+                ),
+            ]
+        elif 'history' in s:
+            templates = [
+                q(
+                    f'In {topic}, what makes evidence strongest?',
+                    [
+                        'A single vague claim.',
+                        'Specific source + context + relevance to argument.',
+                        'Only personal opinion.',
+                        'A quote without explanation.',
+                    ],
+                    'B',
+                    'History answers score higher when evidence is specific and explicitly linked to the claim.',
+                ),
+                q(
+                    f'Which approach is best for a causation question on {topic}?',
+                    [
+                        'List facts without linking them.',
+                        'Explain short-term and long-term causes with priority.',
+                        'Use one cause only.',
+                        'Ignore counter-arguments.',
+                    ],
+                    'B',
+                    'Causation requires structured reasoning across multiple interacting factors.',
+                ),
+                q(
+                    f'How should you conclude an argument about {topic}?',
+                    [
+                        'Repeat the introduction word-for-word.',
+                        'State final judgment and weigh strongest evidence.',
+                        'Add unrelated facts.',
+                        'Avoid making a clear judgment.',
+                    ],
+                    'B',
+                    'A high-quality conclusion weighs evidence and gives a clear final judgment.',
+                ),
+            ]
+        else:
+            templates = [
+                q(
+                    f'In {topic}, which strategy improves accuracy most?',
+                    [
+                        'Define key terms before solving.',
+                        'Skip interpretation and answer quickly.',
+                        'Ignore constraints in the question.',
+                        'Avoid checking the final result.',
+                    ],
+                    'A',
+                    'Clarifying terms and constraints prevents interpretation mistakes.',
+                ),
+                q(
+                    f'When answering {topic} questions, what should be done before submitting?',
+                    [
+                        'Nothing, first answer is always best.',
+                        'Quickly verify reasoning and key assumptions.',
+                        'Delete intermediate steps.',
+                        'Change answer randomly.',
+                    ],
+                    'B',
+                    'A final verification catches logic gaps and small mistakes.',
+                ),
+                q(
+                    f'What practice pattern is strongest for {topic} at {level} difficulty?',
+                    [
+                        'Only reread notes.',
+                        'Only practice easiest items.',
+                        'Alternate concept recall and applied questions.',
+                        'Avoid timed work entirely.',
+                    ],
+                    'C',
+                    'Combining recall and application improves both understanding and exam performance.',
+                ),
+            ]
+
         out: list[dict] = []
         for idx in range(question_count):
-            n = idx + 1
+            base = templates[idx % len(templates)]
             out.append(
                 {
-                    'prompt': f'[{style}] {topic} question {n} ({level})',
-                    'choices': [
-                        'Option A',
-                        'Option B',
-                        'Option C',
-                        'Option D',
-                    ],
-                    'correct_answer': ['A', 'B', 'C', 'D'][idx % 4],
-                    'explanation': f'Explanation for {topic} question {n} in {subject}.',
+                    'prompt': f"{base['prompt']} (Q{idx + 1}, {level})",
+                    'choices': base['choices'],
+                    'correct_answer': base['correct_answer'],
+                    'explanation': base['explanation'],
                 }
             )
+
         return out
+
 

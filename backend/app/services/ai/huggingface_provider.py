@@ -379,40 +379,84 @@ class HuggingFaceProvider(MockAIProvider):
         style: str,
         question_count: int,
     ) -> list[dict] | None:
+        def normalize(payload: Any) -> list[dict]:
+            if isinstance(payload, dict):
+                questions = payload.get('questions') if isinstance(payload.get('questions'), list) else payload.get('items')
+            elif isinstance(payload, list):
+                questions = payload
+            else:
+                questions = None
+
+            if not isinstance(questions, list):
+                return []
+
+            out: list[dict] = []
+            for item in questions[:question_count]:
+                if not isinstance(item, dict):
+                    continue
+
+                prompt = str(item.get('prompt') or item.get('question') or '').strip()
+                explanation = str(item.get('explanation') or item.get('rationale') or '').strip()
+                raw_choices = item.get('choices') if isinstance(item.get('choices'), list) else item.get('options')
+                choices = [str(choice).strip() for choice in raw_choices] if isinstance(raw_choices, list) else []
+                choices = [choice for choice in choices if choice][:4]
+                while len(choices) < 4:
+                    choices.append(f'Option {chr(65 + len(choices))}')
+
+                raw_answer = str(item.get('correct_answer') or item.get('answer') or '').strip()
+                upper_answer = raw_answer.upper()
+
+                if upper_answer in {'A', 'B', 'C', 'D'}:
+                    correct = upper_answer
+                elif raw_answer in choices:
+                    correct = chr(65 + choices.index(raw_answer))
+                elif raw_answer.isdigit() and 1 <= int(raw_answer) <= 4:
+                    correct = chr(64 + int(raw_answer))
+                else:
+                    correct = 'A'
+
+                if not prompt:
+                    continue
+                if not explanation:
+                    explanation = f'Review the key concept behind {topic} and eliminate distractors carefully.'
+
+                out.append(
+                    {
+                        'prompt': prompt,
+                        'choices': choices,
+                        'correct_answer': correct,
+                        'explanation': explanation,
+                    }
+                )
+
+            return out
+
         token_budget = min(1000, max(550, question_count * 140))
         data = self._ask_json(
-            'Generate multiple-choice exam questions with valid options and a single correct answer.',
+            'Generate realistic multiple-choice exam questions with strong distractors and one correct option.',
             (
-                'Return object: {"questions": [ {"prompt": str, "choices": [4 strings], "correct_answer": "A|B|C|D", "explanation": str} ]}. '
+                'Return JSON object {"questions": [{"prompt": str, "choices": [4 strings], "correct_answer": "A|B|C|D", "explanation": str}]}. '
+                'Questions must be specific to topic, not generic placeholders. '
                 f'Create exactly {question_count} questions.\n'
                 f'Subject: {subject}\nTopic: {topic}\nDifficulty: {difficulty}\nTeacher style: {style}'
             ),
             max_new_tokens=token_budget,
         )
-        if not isinstance(data, dict) or not isinstance(data.get('questions'), list):
-            return None
 
-        out: list[dict] = []
-        for item in data['questions'][:question_count]:
-            if not isinstance(item, dict):
-                continue
-            choices = item.get('choices') if isinstance(item.get('choices'), list) else []
-            if len(choices) != 4:
-                continue
-            correct = str(item.get('correct_answer') or '').strip().upper()
-            if correct not in {'A', 'B', 'C', 'D'}:
-                continue
-            prompt = str(item.get('prompt') or '').strip()
-            explanation = str(item.get('explanation') or '').strip()
-            if not prompt or not explanation:
-                continue
-            out.append(
-                {
-                    'prompt': prompt,
-                    'choices': [str(c) for c in choices],
-                    'correct_answer': correct,
-                    'explanation': explanation,
-                }
-            )
+        out = normalize(data)
+        if len(out) >= 3:
+            return out
 
+        raw = self._invoke_model(
+            (
+                'Return ONLY a JSON array. No markdown. '
+                f'Create {question_count} multiple-choice questions for {subject} on {topic} ({difficulty}, style: {style}). '
+                'Each item must include prompt, choices(4), correct_answer(A-D), explanation.'
+            ),
+            max_new_tokens=token_budget,
+        )
+
+        parsed = self._extract_json_block(raw) if isinstance(raw, str) and raw.strip() else None
+        out = normalize(parsed)
         return out if len(out) >= 3 else None
+
