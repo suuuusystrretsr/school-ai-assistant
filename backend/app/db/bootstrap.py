@@ -68,3 +68,29 @@ def ensure_runtime_schema(engine: Engine) -> None:
             _safe_add_column(engine, 'session_signals', 'dwell_seconds INTEGER DEFAULT 0')
         if 'metadata' not in columns:
             _safe_add_column(engine, 'session_signals', f"metadata {json_type} DEFAULT '{{}}'")
+
+    if 'exam_simulations' in tables:
+        columns = {col['name'] for col in inspector.get_columns('exam_simulations')}
+        if 'difficulty' not in columns:
+            _safe_add_column(engine, 'exam_simulations', "difficulty VARCHAR(16) DEFAULT 'medium'")
+        if 'duration_minutes' not in columns:
+            _safe_add_column(engine, 'exam_simulations', 'duration_minutes INTEGER DEFAULT 20')
+        if 'started_at' not in columns:
+            _safe_add_column(engine, 'exam_simulations', 'started_at TIMESTAMP')
+        if 'completed_at' not in columns:
+            _safe_add_column(engine, 'exam_simulations', 'completed_at TIMESTAMP')
+        if 'predicted_score' not in columns:
+            _safe_add_column(engine, 'exam_simulations', 'predicted_score INTEGER DEFAULT 0')
+        if 'actual_score' not in columns:
+            _safe_add_column(engine, 'exam_simulations', 'actual_score INTEGER')
+        if 'weak_areas' not in columns:
+            _safe_add_column(engine, 'exam_simulations', f"weak_areas {json_type} DEFAULT '[]'")
+
+    if 'exam_questions' in tables:
+        columns = {col['name'] for col in inspector.get_columns('exam_questions')}
+        if 'choices' not in columns:
+            _safe_add_column(engine, 'exam_questions', f"choices {json_type} DEFAULT '[]'")
+        if 'correct_answer' not in columns:
+            _safe_add_column(engine, 'exam_questions', "correct_answer VARCHAR(255) DEFAULT 'A'")
+        if 'explanation' not in columns:
+            _safe_add_column(engine, 'exam_questions', "explanation VARCHAR(1000) DEFAULT 'Review concept rationale.'")
