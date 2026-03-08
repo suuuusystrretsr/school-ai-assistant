@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 from urllib import error, request
 
@@ -471,6 +472,42 @@ class HuggingFaceProvider(MockAIProvider):
                     break
             return merged[:target_count]
 
+        def parse_structured_text(raw_text: str) -> list[dict]:
+            if not isinstance(raw_text, str) or not raw_text.strip():
+                return []
+
+            pattern = re.compile(
+                r'Q\s*[:\-]\s*(.+?)\s*\n\s*A\)\s*(.+?)\s*\n\s*B\)\s*(.+?)\s*\n\s*C\)\s*(.+?)\s*\n\s*D\)\s*(.+?)\s*\n\s*(?:ANSWER|CORRECT)\s*[:\-]\s*([ABCD])\s*\n\s*(?:EXPLANATION|WHY)\s*[:\-]\s*(.+?)(?=\n\s*Q\s*[:\-]|\Z)',
+                re.IGNORECASE | re.DOTALL,
+            )
+
+            out: list[dict] = []
+            for match in pattern.finditer(raw_text):
+                prompt = match.group(1).strip()
+                choices = [match.group(i).strip() for i in range(2, 6)]
+                correct = match.group(6).strip().upper()
+                explanation = match.group(7).strip()
+
+                if not prompt:
+                    continue
+                while len(choices) < 4:
+                    choices.append(f'Option {chr(65 + len(choices))}')
+                if correct not in {'A', 'B', 'C', 'D'}:
+                    correct = 'A'
+                if not explanation:
+                    explanation = f'Review the key concept behind {topic} and eliminate distractors carefully.'
+
+                out.append(
+                    {
+                        'prompt': prompt,
+                        'choices': choices[:4],
+                        'correct_answer': correct,
+                        'explanation': explanation,
+                    }
+                )
+
+            return out[:target_count]
+
         token_budget = min(900, max(420, target_count * 130))
         data = self._ask_json(
             'Generate realistic multiple-choice exam questions with strong distractors and one correct option.',
@@ -498,6 +535,25 @@ class HuggingFaceProvider(MockAIProvider):
             parsed = self._extract_json_block(raw) if isinstance(raw, str) and raw.strip() else None
             out = merge_unique(out, normalize(parsed))
 
+        if len(out) < target_count:
+            raw_structured = self._invoke_model(
+                (
+                    f'Create {target_count} multiple-choice questions for {subject} on {topic}. '
+                    f'Difficulty: {difficulty}. Teacher style: {style}. '
+                    'Do NOT use JSON. Use this exact format for each question:\n'
+                    'Q: <question text>\n'
+                    'A) <choice A>\n'
+                    'B) <choice B>\n'
+                    'C) <choice C>\n'
+                    'D) <choice D>\n'
+                    'ANSWER: <A|B|C|D>\n'
+                    'EXPLANATION: <one short explanation>\n'
+                ),
+                max_new_tokens=token_budget,
+            )
+            if isinstance(raw_structured, str) and raw_structured.strip():
+                out = merge_unique(out, parse_structured_text(raw_structured))
+
         # Final reliability path: generate one question at a time if batch generation is weak.
         if len(out) < target_count:
             remaining = target_count - len(out)
@@ -518,6 +574,9 @@ class HuggingFaceProvider(MockAIProvider):
                     break
 
         return out if out else None
+
+
+
 
 
 
