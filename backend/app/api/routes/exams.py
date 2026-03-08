@@ -130,6 +130,28 @@ def _build_question_bank(subject: str, topic: str, difficulty: str, style: str, 
     return [_question_pattern(subject, topic, difficulty, style, idx) for idx in range(question_count)]
 
 
+def _sanitize_question_item(item: dict, fallback: dict) -> dict:
+    prompt = str(item.get('prompt') or fallback['prompt']).strip()[:500]
+    explanation = str(item.get('explanation') or fallback['explanation']).strip()[:1000]
+
+    raw_choices = item.get('choices')
+    if not isinstance(raw_choices, list):
+        raw_choices = fallback['choices']
+    choices = [str(choice).strip()[:240] for choice in raw_choices[:4]]
+    while len(choices) < 4:
+        choices.append(f'Option {chr(65 + len(choices))}')
+
+    correct = str(item.get('correct_answer') or fallback['correct_answer']).strip().upper()
+    if correct not in {'A', 'B', 'C', 'D'}:
+        correct = fallback['correct_answer']
+
+    return {
+        'prompt': prompt or fallback['prompt'][:500],
+        'choices': choices,
+        'correct_answer': correct,
+        'explanation': explanation or fallback['explanation'][:1000],
+    }
+
 def _predict_score(user_id: int, db: Session) -> int:
     previous_scores = [
         row.actual_score
@@ -158,8 +180,12 @@ def generate_exam(payload: ExamGenerateRequest, user: User = Depends(get_current
     db.add(exam)
     db.flush()
 
+    generated_items = _build_question_bank(payload.subject, topic, payload.difficulty, style, payload.question_count)
+
     questions: list[dict] = []
-    for item in _build_question_bank(payload.subject, topic, payload.difficulty, style, payload.question_count):
+    for idx, raw_item in enumerate(generated_items):
+        fallback_item = _question_pattern(payload.subject, topic, payload.difficulty, style, idx)
+        item = _sanitize_question_item(raw_item if isinstance(raw_item, dict) else {}, fallback_item)
         q = ExamQuestion(
             exam_id=exam.id,
             prompt=item['prompt'],

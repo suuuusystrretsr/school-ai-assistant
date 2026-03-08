@@ -3,7 +3,12 @@ function sanitizeUrl(raw: string | undefined): string {
   return raw.trim().replace(/^['\"]+|['\"]+$/g, '');
 }
 
-const DIRECT_API_URL = sanitizeUrl(process.env.NEXT_PUBLIC_API_URL);
+const EXPLICIT_API_URL = sanitizeUrl(process.env.NEXT_PUBLIC_API_URL);
+const EXPLICIT_WS_URL = sanitizeUrl(process.env.NEXT_PUBLIC_WS_URL);
+const DERIVED_API_URL = EXPLICIT_WS_URL
+  ? EXPLICIT_WS_URL.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://').replace(/\/$/, '') + '/api/v1'
+  : '';
+const DIRECT_API_URL = EXPLICIT_API_URL || DERIVED_API_URL;
 const PROXY_API_URL = '/api/proxy';
 const API_URL = DIRECT_API_URL || PROXY_API_URL;
 
@@ -11,8 +16,17 @@ function normalizeBase(url: string) {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-function getApiBases(): string[] {
-  const bases = [PROXY_API_URL, DIRECT_API_URL].filter(Boolean).map(normalizeBase);
+function getApiBases(path: string): string[] {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const isExamPath = normalizedPath.startsWith('/exams');
+
+  // Exams are heavier and may hit Vercel function limits on proxy.
+  // Prefer direct backend URL (if configured) and keep proxy as fallback.
+  const preferred = isExamPath
+    ? [DIRECT_API_URL, PROXY_API_URL]
+    : [PROXY_API_URL, DIRECT_API_URL];
+
+  const bases = preferred.filter(Boolean).map(normalizeBase);
   return Array.from(new Set(bases));
 }
 
@@ -29,7 +43,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 export async function apiFetch(path: string, init: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
   let lastError: unknown = null;
 
-  for (const base of getApiBases()) {
+  for (const base of getApiBases(path)) {
     try {
       return await fetchWithTimeout(`${base}${path}`, init, timeoutMs);
     } catch (error) {

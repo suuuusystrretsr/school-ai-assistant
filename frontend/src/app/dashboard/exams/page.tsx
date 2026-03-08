@@ -83,14 +83,18 @@ export default function ExamsPage() {
       setExam(data);
       setSecondsLeft((data.duration_minutes || duration) * 60);
 
-      await postWithAuth('/analytics/session-signal', {
-        page: 'exams',
-        event_type: 'interaction',
-        action: 'generate-exam',
-        topic,
-        task_difficulty: difficulty,
-        dwell_seconds: 45,
-      });
+      try {
+        await postWithAuth('/analytics/session-signal', {
+          page: 'exams',
+          event_type: 'interaction',
+          action: 'generate-exam',
+          topic,
+          task_difficulty: difficulty,
+          dwell_seconds: 45,
+        });
+      } catch {
+        // Best-effort analytics only; do not fail exam generation.
+      }
     } catch (err) {
       setExam(null);
       setError(err instanceof Error ? err.message : 'Failed to generate exam.');
@@ -129,14 +133,18 @@ export default function ExamsPage() {
       }, 30000);
       setResult(data);
 
-      await postWithAuth('/analytics/session-signal', {
-        page: 'exams',
-        event_type: 'interaction',
-        action: 'submit-exam',
-        topic,
-        task_difficulty: difficulty,
-        dwell_seconds: 120,
-      });
+      try {
+        await postWithAuth('/analytics/session-signal', {
+          page: 'exams',
+          event_type: 'interaction',
+          action: 'submit-exam',
+          topic,
+          task_difficulty: difficulty,
+          dwell_seconds: 120,
+        });
+      } catch {
+        // Best-effort analytics only; do not fail exam submission.
+      }
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : 'Failed to submit exam.');
