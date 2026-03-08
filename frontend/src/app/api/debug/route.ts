@@ -12,7 +12,7 @@ export async function GET() {
   const backendApiUrl = sanitizeUrl(process.env.BACKEND_API_URL);
   const nextPublicWsUrl = sanitizeUrl(process.env.NEXT_PUBLIC_WS_URL);
 
-  const bases = Array.from(new Set([nextPublicApiUrl, '/api/proxy'].filter(Boolean)));
+  const bases = Array.from(new Set(['/api/proxy', nextPublicApiUrl].filter(Boolean)));
 
   return NextResponse.json({
     ok: true,

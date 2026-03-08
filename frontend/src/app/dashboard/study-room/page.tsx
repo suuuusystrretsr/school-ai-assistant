@@ -27,6 +27,12 @@ export default function StudyRoomPage() {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [error, setError] = useState('');
 
+  const [sharedNotes, setSharedNotes] = useState('');
+  const [groupTask, setGroupTask] = useState('');
+  const [groupTasks, setGroupTasks] = useState<string[]>([]);
+  const [groupTutorPrompt, setGroupTutorPrompt] = useState('Help our group revise this topic in 3 steps.');
+  const [groupTutorReply, setGroupTutorReply] = useState('');
+
   const wsUrl = useMemo(() => {
     if (!roomId) return '';
     return `${getWsBaseUrl()}/ws/rooms/${roomId}?user_id=student`;
@@ -76,7 +82,7 @@ export default function StudyRoomPage() {
     };
 
     ws.onerror = () => {
-      setError('WebSocket connection failed. Study room chat may be unavailable on some free-tier cold starts.');
+      setError('WebSocket connection failed. Live chat may be delayed on free-tier cold starts.');
     };
 
     ws.onmessage = (evt) => {
@@ -100,16 +106,26 @@ export default function StudyRoomPage() {
     setContent('');
   }
 
+  function addGroupTask() {
+    if (!groupTask.trim()) return;
+    setGroupTasks((prev) => [...prev, groupTask]);
+    setGroupTask('');
+  }
+
+  async function askGroupTutor() {
+    try {
+      const data = await postWithAuth('/tutor/chat', { message: groupTutorPrompt, subject, mode: 'teacher' });
+      setGroupTutorReply(data.reply || 'No reply.');
+    } catch (err) {
+      setGroupTutorReply(err instanceof Error ? err.message : 'Group tutor unavailable.');
+    }
+  }
+
   return (
     <div className='grid gap-4 lg:grid-cols-3'>
-      <Card className='lg:col-span-2' title='Study Rooms / Group Study' subtitle='Create room, connect chat, and collaborate live'>
+      <Card className='lg:col-span-2' title='Study Rooms / Group Study' subtitle='Live chat implemented, collaborative board in active MVP'>
         <div className='grid gap-2 md:grid-cols-3'>
-          <input
-            className='rounded-xl border p-2'
-            value={roomTitle}
-            onChange={(e) => setRoomTitle(e.target.value)}
-            placeholder='Room title'
-          />
+          <input className='rounded-xl border p-2' value={roomTitle} onChange={(e) => setRoomTitle(e.target.value)} placeholder='Room title' />
           <select className='rounded-xl border p-2' value={subject} onChange={(e) => setSubject(e.target.value)}>
             <option>Math</option>
             <option>Biology</option>
@@ -139,7 +155,7 @@ export default function StudyRoomPage() {
 
         {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
 
-        <div className='mt-4 h-64 overflow-auto rounded-xl border bg-white p-3 text-sm'>
+        <div className='mt-4 h-56 overflow-auto rounded-xl border bg-white p-3 text-sm'>
           {messages.length === 0 ? <p className='text-slate-500'>No messages yet.</p> : null}
           {messages.map((m, i) => <p key={i}>{m}</p>)}
         </div>
@@ -151,15 +167,24 @@ export default function StudyRoomPage() {
       </Card>
 
       <div className='space-y-4'>
-        <Card title='Room Rules'>
-          <p className='text-sm text-slate-700'>Host plus up to 4 invited users (max 5 participants).</p>
+        <Card title='Shared Session Notes (MVP)'>
+          <textarea className='h-24 w-full rounded-xl border p-2' value={sharedNotes} onChange={(e) => setSharedNotes(e.target.value)} placeholder='Shared notes for room...' />
         </Card>
-        <Card title='Collab Tools Status'>
-          <ul className='list-disc pl-5 text-sm text-slate-700'>
-            <li>Live chat: implemented</li>
-            <li>Presence indicator: basic join/leave events implemented</li>
-            <li>Shared notes / task board / AI group tutor: placeholder for next iteration</li>
+
+        <Card title='Group Task Board (MVP)'>
+          <div className='flex gap-2'>
+            <input className='flex-1 rounded-xl border p-2' value={groupTask} onChange={(e) => setGroupTask(e.target.value)} placeholder='Add group task' />
+            <Button variant='secondary' onClick={addGroupTask}>Add</Button>
+          </div>
+          <ul className='mt-2 list-disc pl-5 text-sm'>
+            {groupTasks.map((task) => <li key={task}>{task}</li>)}
           </ul>
+        </Card>
+
+        <Card title='AI Group Tutor'>
+          <textarea className='h-20 w-full rounded-xl border p-2' value={groupTutorPrompt} onChange={(e) => setGroupTutorPrompt(e.target.value)} />
+          <Button className='mt-2' variant='secondary' onClick={askGroupTutor}>Ask Group Tutor</Button>
+          <p className='mt-2 text-sm text-slate-700'>{groupTutorReply || 'No group tutor output yet.'}</p>
         </Card>
       </div>
     </div>

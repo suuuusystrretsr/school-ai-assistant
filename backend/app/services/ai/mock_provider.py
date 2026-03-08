@@ -18,6 +18,12 @@ class MockAIProvider(AIProvider):
                 seen.append(w)
         return seen[:3] or ['core-concept']
 
+    def _extract_topic(self, text: str) -> str:
+        match = re.search(r'^\s*topic\s*:\s*(.+)$', text, flags=re.IGNORECASE | re.MULTILINE)
+        if match:
+            return match.group(1).strip()[:80]
+        return 'this topic'
+
     def solve_problem(self, question: str, mode: str) -> dict:
         clean = question.strip()
 
@@ -70,6 +76,7 @@ class MockAIProvider(AIProvider):
         }
 
     def generate_flashcards(self, source_text: str) -> list[dict]:
+        topic = self._extract_topic(source_text)
         sentences = self._extract_sentences(source_text)
         if not sentences:
             sentences = ['Review the core concept and define it in your own words.']
@@ -80,11 +87,11 @@ class MockAIProvider(AIProvider):
             first_keyword = keywords[0].replace('-', ' ') if keywords else 'concept'
 
             if ' is ' in sentence.lower():
-                question = f'What does "{first_keyword}" mean in this topic?'
+                question = f'In {topic}, what does "{first_keyword}" mean?'
             elif ' converts ' in sentence.lower() or ' into ' in sentence.lower():
-                question = f'What process is being described here: "{sentence[:60]}"?'
+                question = f'In {topic}, what process is described here: "{sentence[:60]}"?'
             else:
-                question = f'What is the main idea in this statement: "{sentence[:60]}"?'
+                question = f'What is the main {topic} idea in this statement: "{sentence[:60]}"?'
 
             cards.append(
                 {
@@ -111,8 +118,18 @@ class MockAIProvider(AIProvider):
 
     def tutor_chat(self, message: str, subject: str, mode: str) -> dict:
         seed = message.strip()[:120]
+        mode_hint = {
+            'eli5': 'very simple words and one concrete analogy',
+            'normal': 'clear steps plus one quick checkpoint',
+            'advanced': 'formal reasoning and edge-case check',
+            'teacher': 'lesson style, guided example, then mini-quiz',
+        }.get(mode.lower(), 'clear explanation and guided practice')
+
         return {
-            'reply': f"Let's learn {subject} step-by-step. First concept from your prompt: \"{seed}\". I will explain, then quiz you.",
+            'reply': (
+                f"Let's learn {subject} step-by-step using {mode_hint}. "
+                f'First concept from your prompt: "{seed}".'
+            ),
             'follow_up_question': f'In one sentence, what is the key idea behind "{seed[:50]}"?',
             'mini_quiz': [
                 {'question': f'{subject}: quick check #1 on the core idea', 'answer': 'State the rule in your own words.'},
@@ -140,6 +157,9 @@ class MockAIProvider(AIProvider):
         if not exams:
             exams = [{'subject': 'General'}]
 
+        grade = payload.get('grade_level')
+        grade_tag = f' ({grade})' if grade else ''
+
         return [
             {
                 'subject': exam['subject'],
@@ -148,7 +168,11 @@ class MockAIProvider(AIProvider):
                 'minutes': 45 + (idx % 2) * 15,
                 'priority': 'high' if idx < 2 else 'medium',
                 'task_type': 'practice',
-                'recommendations': ['Active recall', 'Timed practice', 'Error log review'],
+                'recommendations': [
+                    f'Active recall{grade_tag}',
+                    'Timed practice',
+                    'Error log review',
+                ],
             }
             for idx, exam in enumerate(exams)
         ]
@@ -182,4 +206,3 @@ class MockAIProvider(AIProvider):
                 {'topic': 'Core vocabulary', 'set': 'Concept Drill 1'},
             ],
         }
-

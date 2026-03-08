@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.db.bootstrap import ensure_runtime_schema
 from app.db.session import SessionLocal, engine
 from app.models.base import Base
 from app.ws.manager import room_connection_manager
@@ -32,6 +33,7 @@ app.include_router(api_router, prefix=settings.api_prefix)
 @app.on_event('startup')
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_runtime_schema(engine)
 
 
 @app.get('/health')

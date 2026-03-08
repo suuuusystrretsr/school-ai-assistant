@@ -6,22 +6,9 @@ import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { getWithAuth } from '@/lib/request';
 
-type DashboardData = {
-  subject_progress: Record<string, number>;
-  practice_accuracy: number;
-  readiness_score: number;
-  streak_days: number;
-  recent_performance: {
-    completed_exams: number;
-    homework_solved: number;
-    flashcard_decks: number;
-    study_plans_generated: number;
-    active_days_last_14: number;
-  };
-};
-
 export default function AnalyticsPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [intel, setIntel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -36,10 +23,15 @@ export default function AnalyticsPage() {
       setError('');
       setLoading(true);
       try {
-        const analytics = await getWithAuth('/analytics/dashboard');
-        setData(analytics);
+        const [analytics, intelligence] = await Promise.all([
+          getWithAuth('/analytics/dashboard'),
+          getWithAuth('/analytics/intelligence'),
+        ]);
+        setDashboard(analytics);
+        setIntel(intelligence);
       } catch (err) {
-        setData(null);
+        setDashboard(null);
+        setIntel(null);
         setError(err instanceof Error ? err.message : 'Failed to load analytics.');
       } finally {
         setLoading(false);
@@ -49,30 +41,32 @@ export default function AnalyticsPage() {
     load();
   }, []);
 
-  const subjectEntries = Object.entries(data?.subject_progress || {});
+  const subjectEntries = Object.entries(dashboard?.subject_progress || {});
 
   return (
     <div className='space-y-4'>
-      {!loading && !error && !data ? (
-        <p className='text-sm text-slate-600'>Log in to load analytics.</p>
-      ) : null}
+      {!loading && !error && !dashboard ? <p className='text-sm text-slate-600'>Log in to load analytics.</p> : null}
 
-      <Card title='Learning Analytics Dashboard' subtitle='Live metrics from your account activity'>
+      <Card title='Learning Analytics Dashboard' subtitle='Mastery, confidence, retention, and execution intelligence'>
         {loading ? <p className='text-sm text-slate-600'>Loading analytics...</p> : null}
         {error ? <p className='text-sm text-rose-700'>{error}</p> : null}
 
-        <div className='grid gap-4 md:grid-cols-3'>
+        <div className='grid gap-4 md:grid-cols-4'>
           <div className='rounded-xl bg-slate-50 p-4'>
-            <p className='text-sm text-slate-600'>Estimated Exam Readiness</p>
-            <p className='text-3xl font-bold'>{Math.round(data?.readiness_score || 0)}%</p>
+            <p className='text-sm text-slate-600'>Outcome Forecast</p>
+            <p className='text-3xl font-bold'>{Math.round(intel?.exam_outcome_simulator?.if_exam_today || dashboard?.readiness_score || 0)}%</p>
           </div>
           <div className='rounded-xl bg-slate-50 p-4'>
             <p className='text-sm text-slate-600'>Practice Accuracy</p>
-            <p className='text-3xl font-bold'>{Math.round(data?.practice_accuracy || 0)}%</p>
+            <p className='text-3xl font-bold'>{Math.round(dashboard?.practice_accuracy || 0)}%</p>
           </div>
           <div className='rounded-xl bg-slate-50 p-4'>
-            <p className='text-sm text-slate-600'>Streak</p>
-            <p className='text-3xl font-bold'>{Math.round(data?.streak_days || 0)} days</p>
+            <p className='text-sm text-slate-600'>Execution Stability</p>
+            <p className='text-3xl font-bold'>{Math.round(dashboard?.learning_consistency || 0)}%</p>
+          </div>
+          <div className='rounded-xl bg-slate-50 p-4'>
+            <p className='text-sm text-slate-600'>Identity Model</p>
+            <p className='text-3xl font-bold'>{intel?.study_identity_model?.identity || 'n/a'}</p>
           </div>
         </div>
       </Card>
@@ -85,26 +79,84 @@ export default function AnalyticsPage() {
             {subjectEntries.map(([subject, progress]) => (
               <div key={subject}>
                 <p className='mb-1 text-sm text-slate-700'>{subject}</p>
-                <ProgressBar value={Math.round(progress)} />
+                <ProgressBar value={Math.round(progress as number)} />
               </div>
             ))}
           </div>
         )}
       </Card>
 
-      <Card title='Recent Activity Summary'>
-        <ul className='space-y-2 text-sm text-slate-700'>
-          <li>Completed exams: {data?.recent_performance?.completed_exams || 0}</li>
-          <li>Homework solved: {data?.recent_performance?.homework_solved || 0}</li>
-          <li>Flashcard decks generated: {data?.recent_performance?.flashcard_decks || 0}</li>
-          <li>Study plans generated: {data?.recent_performance?.study_plans_generated || 0}</li>
-          <li>Active days in last 14: {data?.recent_performance?.active_days_last_14 || 0}</li>
-        </ul>
-      </Card>
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Card title='Understanding Confidence Map'>
+          <p className='text-sm'>Overall confidence: <strong>{intel?.confidence_map?.overall_confidence ?? 0}%</strong></p>
+          <p className='text-sm mt-1'>Actual mastery: <strong>{intel?.confidence_map?.overall_actual ?? 0}%</strong></p>
+          <p className='text-sm mt-2'>Overconfidence: {(intel?.confidence_map?.overconfidence || []).join(', ') || 'None'}</p>
+          <p className='text-sm'>Hidden strengths: {(intel?.confidence_map?.hidden_strength || []).join(', ') || 'None'}</p>
+          <p className='text-sm'>Uncertainty zones: {(intel?.confidence_map?.uncertainty_zones || []).join(', ') || 'None'}</p>
+        </Card>
 
-      <Card title='Focus & Distraction Detection'>
-        <p className='text-sm text-slate-700'>If repeated tab switches are detected, the app prompts: "Still studying?".</p>
-      </Card>
+        <Card title='Cognitive Breakdown Engine'>
+          <p className='text-sm'>Dominant issue: <strong>{intel?.cognitive_breakdown?.dominant || 'n/a'}</strong></p>
+          <ul className='mt-2 list-disc pl-5 text-sm'>
+            {(intel?.cognitive_breakdown?.breakdown || []).map((item: any) => (
+              <li key={item.type}>{item.type}: {item.count}</li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Card title='AI Why You Are Stuck'>
+          <ul className='list-disc pl-5 text-sm'>
+            {(intel?.why_stuck?.insights || []).map((item: string) => <li key={item}>{item}</li>)}
+          </ul>
+        </Card>
+
+        <Card title='Knowledge Dependency Scanner'>
+          <ul className='list-disc pl-5 text-sm'>
+            {(intel?.knowledge_dependencies || []).map((item: any, idx: number) => (
+              <li key={idx}>{item.weak_topic}: depends on {(item.depends_on || []).join(', ')}</li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Card title='Friction Detector'>
+          <p className='text-sm'>Score: <strong>{intel?.friction_detector?.score ?? 0}</strong></p>
+          <p className='text-sm mt-1'>{intel?.friction_detector?.prompt}</p>
+          <ul className='mt-2 list-disc pl-5 text-sm'>
+            {(intel?.friction_detector?.patterns || []).map((item: string) => <li key={item}>{item}</li>)}
+          </ul>
+        </Card>
+
+        <Card title='Mistake Pattern Intelligence'>
+          <p className='text-sm'>Likely grade impact: <strong>{intel?.mistake_pattern_intelligence?.likely_grade_impact || 'n/a'}</strong></p>
+          <ul className='mt-2 list-disc pl-5 text-sm'>
+            {(intel?.mistake_pattern_intelligence?.common_error_types || []).map((item: string) => <li key={item}>{item}</li>)}
+          </ul>
+        </Card>
+      </div>
+
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Card title='AI Session Replay'>
+          <p className='text-sm'><strong>Strongest moment:</strong> {intel?.session_replay?.strongest_moment || 'n/a'}</p>
+          <p className='text-sm mt-1'><strong>Most wasted time:</strong> {intel?.session_replay?.most_wasted_time || 'n/a'}</p>
+          <p className='text-sm mt-1'><strong>Most valuable concept:</strong> {intel?.session_replay?.most_valuable_concept || 'n/a'}</p>
+          <p className='text-sm mt-1'><strong>Most fragile concept:</strong> {intel?.session_replay?.most_fragile_concept || 'n/a'}</p>
+          <p className='text-sm mt-1'><strong>Recommended next action:</strong> {intel?.session_replay?.recommended_next_action || 'n/a'}</p>
+        </Card>
+
+        <Card title='Exam Outcome Simulator + Priority Distortion'>
+          <ul className='list-disc pl-5 text-sm'>
+            <li>If exam today: {intel?.exam_outcome_simulator?.if_exam_today ?? 0}%</li>
+            <li>If study 30 more minutes: {intel?.exam_outcome_simulator?.if_study_30_more_minutes ?? 0}%</li>
+            <li>If fix one weak area: {intel?.exam_outcome_simulator?.if_fix_one_weak_area ?? 0}%</li>
+            <li>If ignore retention risk: {intel?.exam_outcome_simulator?.if_ignore_retention_risk ?? 0}%</li>
+          </ul>
+          <p className='mt-3 text-sm'>{intel?.priority_distortion?.message || 'n/a'}</p>
+        </Card>
+      </div>
     </div>
   );
 }

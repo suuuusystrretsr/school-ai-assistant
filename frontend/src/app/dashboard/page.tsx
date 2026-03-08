@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [buddy, setBuddy] = useState<BuddyData | null>(null);
+  const [intel, setIntel] = useState<any>(null);
 
   useEffect(() => {
     async function load() {
@@ -51,12 +52,14 @@ export default function DashboardPage() {
       setError('');
       setLoading(true);
       try {
-        const [analyticsData, buddyData] = await Promise.all([
+        const [analyticsData, buddyData, intelligence] = await Promise.all([
           getWithAuth('/analytics/dashboard'),
           getWithAuth('/analytics/study-buddy'),
+          getWithAuth('/analytics/intelligence'),
         ]);
         setDashboard(analyticsData);
         setBuddy(buddyData);
+        setIntel(intelligence);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data.');
       } finally {
@@ -76,9 +79,9 @@ export default function DashboardPage() {
 
   const metrics = [
     { label: 'Practice Accuracy', value: toPercent(dashboard?.practice_accuracy) },
-    { label: 'Exam Readiness', value: toPercent(dashboard?.readiness_score) },
-    { label: 'Learning Consistency', value: toPercent(dashboard?.learning_consistency) },
-    { label: 'Retention Health', value: toPercent(retentionHealth) },
+    { label: 'Outcome Forecast', value: toPercent(intel?.exam_outcome_simulator?.if_exam_today ?? dashboard?.readiness_score) },
+    { label: 'Execution Stability', value: toPercent(dashboard?.learning_consistency) },
+    { label: 'Memory Forecast Health', value: toPercent(retentionHealth) },
   ];
 
   const masteryEntries = Object.entries(dashboard?.mastery_by_topic || {});
@@ -94,21 +97,21 @@ export default function DashboardPage() {
       ) : null}
 
       <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-        {metrics.map((m) => (
-          <Card key={m.label} title={m.label}>
+        {metrics.map((metric) => (
+          <Card key={metric.label} title={metric.label}>
             <div className='flex items-end justify-between'>
-              <p className='text-3xl font-bold'>{m.value}%</p>
-              <Badge label={m.value > 0 ? 'Live data' : 'No data yet'} tone={m.value > 0 ? 'good' : 'neutral'} />
+              <p className='text-3xl font-bold'>{metric.value}%</p>
+              <Badge label={metric.value > 0 ? 'Live data' : 'No data yet'} tone={metric.value > 0 ? 'good' : 'neutral'} />
             </div>
             <div className='mt-3'>
-              <ProgressBar value={m.value} />
+              <ProgressBar value={metric.value} />
             </div>
           </Card>
         ))}
       </div>
 
       <div className='grid gap-4 lg:grid-cols-3'>
-        <Card title='Knowledge Graph' subtitle='Mastery by topic from your activity'>
+        <Card title='Knowledge Structure' subtitle='Mastery and dependencies'>
           {masteryEntries.length === 0 ? (
             <p className='text-sm text-slate-600'>No mastery data yet. Complete homework, exams, or tutor sessions to populate this.</p>
           ) : (
@@ -127,17 +130,25 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+          {intel?.knowledge_dependencies?.length ? (
+            <div className='mt-3 rounded-xl border bg-slate-50 p-3 text-xs'>
+              <p className='font-semibold'>Dependency Scanner</p>
+              {intel.knowledge_dependencies.slice(0, 2).map((dep: any, idx: number) => (
+                <p key={idx} className='mt-1'>{dep.weak_topic} -> affects {(dep.impacts || []).join(', ') || 'nearby topics'}</p>
+              ))}
+            </div>
+          ) : null}
         </Card>
 
-        <Card title='Review Urgency' subtitle='Memory decay prediction'>
+        <Card title='Memory Forecast' subtitle='What you are about to forget'>
           <ul className='space-y-2 text-sm'>
-            <li>High: {(dashboard?.retention_forecast?.high || []).join(', ') || 'None'}</li>
-            <li>Medium: {(dashboard?.retention_forecast?.medium || []).join(', ') || 'None'}</li>
-            <li>Low: {(dashboard?.retention_forecast?.low || []).join(', ') || 'None'}</li>
+            <li>Immediate: {(intel?.memory_forecast?.forget_soon || dashboard?.retention_forecast?.high || []).join(', ') || 'None'}</li>
+            <li>Soon: {(intel?.memory_forecast?.review_soon || dashboard?.retention_forecast?.medium || []).join(', ') || 'None'}</li>
+            <li>Stable: {(intel?.memory_forecast?.stable || dashboard?.retention_forecast?.low || []).join(', ') || 'None'}</li>
           </ul>
         </Card>
 
-        <Card title='Study Buddy' subtitle='Gamified consistency coach'>
+        <Card title='Performance Coach' subtitle='Friction + priority guidance'>
           {buddy ? (
             <>
               <p className='text-sm text-slate-700'>Mood: <strong>{buddy.mood}</strong></p>
@@ -145,13 +156,37 @@ export default function DashboardPage() {
                 <Badge label={`Streak ${buddy.streak_days} days`} tone='brand' />
                 <Badge label={`Consistency ${toPercent(buddy.consistency_score)}%`} tone='good' />
               </div>
-              <p className='mt-3 text-sm text-slate-700'>
-                {buddy.nudges?.[0]?.message || 'Complete one study action to get your first personalized nudge.'}
-              </p>
+              <p className='mt-3 text-sm text-slate-700'>{buddy.nudges?.[0]?.message || 'Complete one study action to get your first personalized nudge.'}</p>
             </>
           ) : (
-            <p className='text-sm text-slate-600'>Study buddy data unavailable.</p>
+            <p className='text-sm text-slate-600'>Study coach data unavailable.</p>
           )}
+          {intel?.friction_detector ? (
+            <div className='mt-3 rounded-xl border bg-slate-50 p-3 text-xs'>
+              <p><strong>Friction score:</strong> {intel.friction_detector.score}</p>
+              <p>{intel.friction_detector.prompt}</p>
+            </div>
+          ) : null}
+        </Card>
+      </div>
+
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <Card title='Understanding Confidence Map' subtitle='Confidence vs actual mastery'>
+          <div className='space-y-2 text-sm'>
+            <p>Overall confidence: <strong>{intel?.confidence_map?.overall_confidence ?? 0}%</strong></p>
+            <p>Actual performance: <strong>{intel?.confidence_map?.overall_actual ?? 0}%</strong></p>
+            <p>Overconfidence zones: {(intel?.confidence_map?.overconfidence || []).join(', ') || 'None'}</p>
+            <p>Hidden strengths: {(intel?.confidence_map?.hidden_strength || []).join(', ') || 'None'}</p>
+            <p>Uncertainty zones: {(intel?.confidence_map?.uncertainty_zones || []).join(', ') || 'None'}</p>
+          </div>
+        </Card>
+
+        <Card title='Cognitive Breakdown + Next Action' subtitle='Why errors happen and what to do next'>
+          <p className='text-sm'>Dominant breakdown: <strong>{intel?.cognitive_breakdown?.dominant || 'n/a'}</strong></p>
+          <p className='mt-2 text-sm'>Why stuck: {(intel?.why_stuck?.insights || []).join(' | ') || 'n/a'}</p>
+          <p className='mt-2 text-sm'>Priority distortion: {intel?.priority_distortion?.message || 'n/a'}</p>
+          <p className='mt-2 text-sm'>Study identity: <strong>{intel?.study_identity_model?.identity || 'n/a'}</strong></p>
+          <p className='mt-2 text-sm'>Next best action: <strong>{intel?.next_best_action?.title || 'n/a'}</strong></p>
         </Card>
       </div>
     </div>

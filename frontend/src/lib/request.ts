@@ -1,8 +1,9 @@
 import { apiFetch } from '@/lib/api';
+import { clearAuthToken, getAuthToken } from '@/lib/auth';
 import { toReadableError } from '@/lib/error-message';
 
-function getToken(): string {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('schoolai_token') : null;
+function requireToken(): string {
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Please create an account and log in first.');
   }
@@ -18,7 +19,7 @@ async function parseJsonSafe(res: Response): Promise<any> {
 }
 
 export async function requestWithAuth(path: string, method: string = 'GET', body?: Record<string, unknown>): Promise<any> {
-  const token = getToken();
+  const token = requireToken();
 
   let res: Response;
   try {
@@ -31,11 +32,15 @@ export async function requestWithAuth(path: string, method: string = 'GET', body
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error('Cannot reach backend API. Open the Render /health URL and retry in 30 seconds.');
+    throw new Error('Cannot reach backend API. Open Render /health, wait for wake-up, then retry.');
   }
 
   const data = await parseJsonSafe(res);
   if (!res.ok) {
+    if (res.status === 401) {
+      clearAuthToken();
+      throw new Error('Session expired. Log in again.');
+    }
     throw new Error(toReadableError(data?.detail, `Request failed (${res.status})`));
   }
 

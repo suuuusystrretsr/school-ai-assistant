@@ -12,7 +12,7 @@ function normalizeBase(url: string) {
 }
 
 function getApiBases(): string[] {
-  const bases = [DIRECT_API_URL, PROXY_API_URL].filter(Boolean).map(normalizeBase);
+  const bases = [PROXY_API_URL, DIRECT_API_URL].filter(Boolean).map(normalizeBase);
   return Array.from(new Set(bases));
 }
 

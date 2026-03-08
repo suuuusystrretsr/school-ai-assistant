@@ -7,14 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getWithAuth, postWithAuth } from '@/lib/request';
 
+type TutorTurn = {
+  role: 'student' | 'tutor';
+  text: string;
+};
+
 export default function TutorPage() {
   const [subject, setSubject] = useState('Math');
   const [mode, setMode] = useState('normal');
   const [message, setMessage] = useState('Teach me algebra step by step.');
   const [reply, setReply] = useState<any>(null);
   const [buddy, setBuddy] = useState<any>(null);
+  const [history, setHistory] = useState<TutorTurn[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     async function loadBuddy() {
@@ -30,18 +36,31 @@ export default function TutorPage() {
 
   async function askTutor() {
     if (!message.trim()) {
-      setError('Enter a question first.');
+      setStatus('Enter a question first.');
       return;
     }
 
-    setError('');
     setLoading(true);
+    setStatus('Tutor is thinking...');
+
     try {
       const data = await postWithAuth('/tutor/chat', { message, subject, mode });
       setReply(data);
+      setHistory((prev) => [...prev, { role: 'student', text: message }, { role: 'tutor', text: data.reply }]);
+      setStatus('Tutor response ready.');
+
+      await postWithAuth('/analytics/session-signal', {
+        page: 'tutor',
+        event_type: 'interaction',
+        action: 'ask-tutor',
+        topic: subject,
+        task_difficulty: mode === 'advanced' ? 'hard' : 'medium',
+        dwell_seconds: 60,
+        self_confidence: 55,
+      });
     } catch (err) {
       setReply(null);
-      setError(err instanceof Error ? err.message : 'Tutor request failed.');
+      setStatus(err instanceof Error ? err.message : 'Tutor request failed.');
     } finally {
       setLoading(false);
     }
@@ -58,6 +77,7 @@ export default function TutorPage() {
               <option>Biology</option>
               <option>History</option>
               <option>Chemistry</option>
+              <option>Physics</option>
             </select>
           </label>
           <label className='text-sm'>
@@ -72,13 +92,26 @@ export default function TutorPage() {
         </div>
 
         <textarea className='mt-3 h-28 w-full rounded-xl border p-3' value={message} onChange={(e) => setMessage(e.target.value)} />
-        <Button className='mt-3' onClick={askTutor} disabled={loading}>
-          {loading ? 'Thinking...' : 'Ask Tutor'}
-        </Button>
-        {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
+        <div className='mt-3 flex flex-wrap gap-2'>
+          <Button onClick={askTutor} disabled={loading}>{loading ? 'Thinking...' : 'Ask Tutor'}</Button>
+          {reply?.follow_up_question ? (
+            <Button variant='secondary' onClick={() => setMessage(reply.follow_up_question)}>
+              Use Follow-up Prompt
+            </Button>
+          ) : null}
+        </div>
+        {status ? <p className='mt-2 text-sm text-rose-700'>{status}</p> : null}
+
+        {history.length > 0 ? (
+          <div className='mt-4 space-y-2 rounded-xl border bg-white p-4 text-sm'>
+            {history.slice(-6).map((turn, idx) => (
+              <p key={idx}><strong>{turn.role === 'student' ? 'You' : 'Tutor'}:</strong> {turn.text}</p>
+            ))}
+          </div>
+        ) : null}
 
         {reply ? (
-          <div className='mt-4 rounded-xl border bg-white p-4 text-sm space-y-2'>
+          <div className='mt-4 space-y-2 rounded-xl border bg-white p-4 text-sm'>
             <p><strong>Tutor:</strong> {reply.reply}</p>
             <p><strong>Follow-up:</strong> {reply.follow_up_question}</p>
             <p><strong>Adaptive Path:</strong> {reply.adaptive_path?.join(' -> ')}</p>
