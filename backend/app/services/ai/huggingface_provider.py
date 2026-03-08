@@ -1,6 +1,7 @@
 ﻿import json
 from typing import Any
 from urllib import error, request
+from urllib.parse import quote
 
 from app.core.config import get_settings
 from app.services.ai.mock_provider import MockAIProvider
@@ -13,7 +14,7 @@ class HuggingFaceProvider(MockAIProvider):
         self.model_id = (self.settings.hf_model_id or '').strip()
         self.timeout = max(10, int(self.settings.hf_timeout_seconds))
         self.max_new_tokens = max(128, int(self.settings.hf_max_new_tokens))
-        self.endpoint = f'https://router.huggingface.co/hf-inference/models/{self.model_id}' if self.model_id else ''
+        self.endpoint = f"https://router.huggingface.co/hf-inference/models/{quote(self.model_id, safe='')}" if self.model_id else ''
         self.last_error = ''
 
     def _invoke_model(self, prompt: str, max_new_tokens: int | None = None) -> str | None:
@@ -411,6 +412,7 @@ class HuggingFaceProvider(MockAIProvider):
             )
 
         return out if len(out) >= 3 else None
+
 
 
 
