@@ -1,4 +1,5 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -17,16 +18,26 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Email already registered')
 
-    user = User(
-        email=payload.email,
-        full_name=payload.full_name,
-        hashed_password=hash_password(payload.password),
-        is_active=True,
-    )
-    db.add(user)
-    db.flush()
-    db.add(UserProfile(user_id=user.id))
-    db.commit()
+    try:
+        user = User(
+            email=payload.email,
+            full_name=payload.full_name,
+            hashed_password=hash_password(payload.password),
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        db.add(UserProfile(user_id=user.id))
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Database error during signup')
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Signup internal error: {type(exc).__name__}',
+        )
 
     token = create_access_token(str(user.id))
     return TokenResponse(access_token=token)
@@ -35,7 +46,10 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 @router.post('/login', response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
-    if not user or not verify_password(payload.password, user.hashed_password):
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
+
+    if not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid credentials')
 
     token = create_access_token(str(user.id))
