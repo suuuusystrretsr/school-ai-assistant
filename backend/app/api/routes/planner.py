@@ -1,4 +1,4 @@
-﻿from datetime import date
+from datetime import date
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.planner import PlannerTask
-from app.models.user import User
+from app.models.user import User, UserProfile
 from app.schemas.planner import PlannerGenerateRequest, PlannerTaskResponse
 from app.services.ai.factory import get_ai_provider
 
@@ -16,7 +16,15 @@ ai = get_ai_provider()
 
 @router.post('/generate', response_model=list[PlannerTaskResponse])
 def generate_plan(payload: PlannerGenerateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    generated_tasks = ai.generate_study_plan(payload.model_dump())
+    grade_level = None
+    if isinstance(user.profile, UserProfile) and user.profile.grade_level:
+        grade_level = user.profile.grade_level
+
+    payload_data = payload.model_dump()
+    if grade_level:
+        payload_data['grade_level'] = grade_level
+
+    generated_tasks = ai.generate_study_plan(payload_data)
     rows: list[PlannerTask] = []
     for item in generated_tasks:
         row = PlannerTask(
@@ -27,7 +35,7 @@ def generate_plan(payload: PlannerGenerateRequest, user: User = Depends(get_curr
             minutes=item['minutes'],
             priority=item['priority'],
             task_type=item['task_type'],
-            recommendations=item['recommendations'],
+            recommendations=(item['recommendations'] + [f'Calibrated for {grade_level}']) if grade_level else item['recommendations'],
             completed=False,
         )
         db.add(row)

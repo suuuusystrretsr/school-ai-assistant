@@ -27,7 +27,7 @@ export default function LandingPage() {
             Study faster with a premium AI system built for real student outcomes.
           </h1>
           <p className='mt-5 max-w-xl text-lg text-slate-600'>
-            SCHOOL AI ASSISTANT combines tutoring, planning, exam simulation, analytics, and collaboration in one polished workspace.
+            SCHOOL AI ASSISTANT combines tutoring, planning, exam simulation, analytics, and collaboration in one polished workspace. Demo pages are visible without login, but live actions require account login.
           </p>
           <div className='mt-7 flex flex-wrap gap-3'>
             <Link href='/signup'>
@@ -35,7 +35,7 @@ export default function LandingPage() {
             </Link>
             <Link href='/dashboard/homework'>
               <Button variant='secondary' className='px-6 py-3 text-base'>
-                View Product (Homework)
+                View Product (Homework Demo)
               </Button>
             </Link>
           </div>
@@ -93,3 +93,4 @@ export default function LandingPage() {
     </main>
   );
 }
+

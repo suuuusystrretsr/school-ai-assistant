@@ -1,5 +1,5 @@
-﻿
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.analytics import AnalyticsSnapshot
+from app.models.exam import ExamSimulation
+from app.models.flashcard import FlashcardDeck
+from app.models.homework import HomeworkRequest
 from app.models.knowledge import KnowledgeGraphNode, MemoryReviewSchedule
+from app.models.planner import PlannerTask
 from app.models.user import StudyBuddyState, User
 from app.schemas.analytics import DashboardAnalyticsResponse, LearningSignalRequest
 from app.services.analytics.signals import detect_confusion
@@ -16,38 +20,174 @@ from app.services.planner.memory import compute_memory_strength, next_review_fro
 router = APIRouter(prefix='/analytics', tags=['analytics'])
 
 
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _collect_activity_dates(user_id: int, db: Session) -> dict:
+    activity_dates: set = set()
+    day_counts: dict = defaultdict(int)
+
+    sources = [
+        db.query(HomeworkRequest.created_at).filter(HomeworkRequest.user_id == user_id).all(),
+        db.query(FlashcardDeck.created_at).filter(FlashcardDeck.user_id == user_id).all(),
+        db.query(PlannerTask.created_at).filter(PlannerTask.user_id == user_id).all(),
+        db.query(ExamSimulation.started_at).filter(ExamSimulation.user_id == user_id).all(),
+        db.query(ExamSimulation.completed_at).filter(ExamSimulation.user_id == user_id).all(),
+    ]
+
+    for source in sources:
+        for (raw_dt,) in source:
+            dt = _normalize_datetime(raw_dt)
+            if not dt:
+                continue
+            d = dt.date()
+            activity_dates.add(d)
+            day_counts[d] += 1
+
+    today = datetime.now(timezone.utc).date()
+    active_days_last_14 = sum(1 for d in activity_dates if d >= (today - timedelta(days=13)))
+
+    streak = 0
+    cursor = today
+    while cursor in activity_dates:
+        streak += 1
+        cursor = cursor - timedelta(days=1)
+
+    recent_activity = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        recent_activity.append({'date': day.isoformat(), 'activities': day_counts.get(day, 0)})
+
+    consistency = int(round((active_days_last_14 / 14) * 100)) if active_days_last_14 else 0
+
+    return {
+        'streak': streak,
+        'active_days_last_14': active_days_last_14,
+        'learning_consistency': consistency,
+        'recent_activity': recent_activity,
+    }
+
+
+def _build_dashboard_payload(user: User, db: Session) -> dict:
+    completed_exams = (
+        db.query(ExamSimulation)
+        .filter(ExamSimulation.user_id == user.id, ExamSimulation.actual_score.isnot(None))
+        .order_by(ExamSimulation.completed_at.asc())
+        .all()
+    )
+
+    exam_scores = [row.actual_score for row in completed_exams if row.actual_score is not None]
+    latest_score = exam_scores[-1] if exam_scores else 0
+    avg_score = int(round(sum(exam_scores) / len(exam_scores))) if exam_scores else 0
+
+    practice_accuracy = avg_score
+    readiness_score = int(round((avg_score * 0.6) + (latest_score * 0.4))) if exam_scores else 0
+
+    subject_buckets: dict[str, list[int]] = defaultdict(list)
+    for exam in completed_exams:
+        if exam.actual_score is not None:
+            subject_buckets[exam.subject].append(exam.actual_score)
+
+    subject_progress = {
+        subject: int(round(sum(scores) / len(scores)))
+        for subject, scores in subject_buckets.items()
+    }
+
+    nodes = db.query(KnowledgeGraphNode).filter(KnowledgeGraphNode.user_id == user.id).all()
+    mastery_by_topic: dict = {}
+    for node in nodes:
+        mastery_by_topic.setdefault(node.subject, {})[node.topic] = {
+            'status': node.status,
+            'score': int(round(node.mastery_score * 100)),
+        }
+
+    memory_rows = db.query(MemoryReviewSchedule).filter(MemoryReviewSchedule.user_id == user.id).all()
+    now = datetime.now(timezone.utc)
+    threshold = now + timedelta(days=3)
+
+    high = [row.topic for row in memory_rows if row.urgency == 'high']
+    medium = [row.topic for row in memory_rows if row.urgency == 'medium']
+    low = [row.topic for row in memory_rows if row.urgency == 'low']
+    next_3_days_risk = [
+        row.topic
+        for row in memory_rows
+        if _normalize_datetime(row.next_review_at) and _normalize_datetime(row.next_review_at) <= threshold
+    ]
+
+    activity = _collect_activity_dates(user.id, db)
+
+    homework_count = db.query(HomeworkRequest.id).filter(HomeworkRequest.user_id == user.id).count()
+    flashcard_count = db.query(FlashcardDeck.id).filter(FlashcardDeck.user_id == user.id).count()
+    planner_count = db.query(PlannerTask.id).filter(PlannerTask.user_id == user.id).count()
+
+    retention_forecast = {
+        'high': high,
+        'medium': medium,
+        'low': low,
+        'next_3_days_risk': next_3_days_risk,
+    }
+
+    recent_performance = {
+        'completed_exams': len(exam_scores),
+        'homework_solved': homework_count,
+        'flashcard_decks': flashcard_count,
+        'study_plans_generated': planner_count,
+        'active_days_last_14': activity['active_days_last_14'],
+        'last_7_days': activity['recent_activity'],
+    }
+
+    return {
+        'subject_progress': subject_progress,
+        'mastery_by_topic': mastery_by_topic,
+        'recent_performance': recent_performance,
+        'practice_accuracy': practice_accuracy,
+        'readiness_score': readiness_score,
+        'learning_consistency': activity['learning_consistency'],
+        'streak_days': activity['streak'],
+        'retention_forecast': retention_forecast,
+    }
+
+
 @router.get('/dashboard', response_model=DashboardAnalyticsResponse)
 def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    computed = _build_dashboard_payload(user, db)
+
     snapshot = (
         db.query(AnalyticsSnapshot)
         .filter(AnalyticsSnapshot.user_id == user.id)
         .order_by(AnalyticsSnapshot.created_at.desc())
         .first()
     )
+
     if not snapshot:
-        snapshot = AnalyticsSnapshot(
-            user_id=user.id,
-            subject_progress={'Math': 64, 'Biology': 58, 'History': 72},
-            mastery_by_topic={'Linear equations': 0.8, 'Quadratics': 0.43, 'Polynomials': 0.2},
-            recent_performance={'last_7_days': [65, 70, 72, 68, 74, 76, 78]},
-            practice_accuracy=71,
-            readiness_score=69,
-            learning_consistency=62,
-            streak_days=5,
-            retention_forecast={'next_3_days_risk': ['Quadratics', 'Cell respiration']},
-            distraction_risk='medium',
-        )
-        db.add(snapshot)
-        db.commit()
-        db.refresh(snapshot)
+        snapshot = AnalyticsSnapshot(user_id=user.id)
 
-    buddy = db.query(StudyBuddyState).filter(StudyBuddyState.user_id == user.id).first()
-    if not buddy:
-        db.add(StudyBuddyState(user_id=user.id, streak_days=3, consistency_score=60, mood='motivated', nudges=[]))
-        db.commit()
+    snapshot.subject_progress = computed['subject_progress']
+    snapshot.mastery_by_topic = computed['mastery_by_topic']
+    snapshot.recent_performance = computed['recent_performance']
+    snapshot.practice_accuracy = computed['practice_accuracy']
+    snapshot.readiness_score = computed['readiness_score']
+    snapshot.learning_consistency = computed['learning_consistency']
+    snapshot.streak_days = computed['streak_days']
+    snapshot.retention_forecast = computed['retention_forecast']
+    snapshot.distraction_risk = 'low'
 
-    confusion_detector = {'status': 'monitoring', 'message': 'Need a hint? prompt appears only when confusion is detected.'}
-    focus_mode = {'enabled': False, 'suggestion': 'Start a 25/5 focus cycle for deeper work.'}
+    db.add(snapshot)
+    db.commit()
+
+    confusion_detector = {
+        'status': 'monitoring',
+        'message': 'Need a hint? appears only when confusion signals are detected.',
+    }
+    focus_mode = {
+        'enabled': False,
+        'suggestion': 'Start a 25/5 focus cycle for deeper work.',
+    }
 
     return DashboardAnalyticsResponse(
         subject_progress=snapshot.subject_progress,
@@ -131,10 +271,20 @@ def get_review_queue(user: User = Depends(get_current_user), db: Session = Depen
 
 
 @router.post('/knowledge-node')
-def upsert_knowledge_node(subject: str, topic: str, mastery_score: float, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upsert_knowledge_node(
+    subject: str,
+    topic: str,
+    mastery_score: float,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     node = (
         db.query(KnowledgeGraphNode)
-        .filter(KnowledgeGraphNode.user_id == user.id, KnowledgeGraphNode.subject == subject, KnowledgeGraphNode.topic == topic)
+        .filter(
+            KnowledgeGraphNode.user_id == user.id,
+            KnowledgeGraphNode.subject == subject,
+            KnowledgeGraphNode.topic == topic,
+        )
         .first()
     )
     status = 'mastered' if mastery_score >= 0.75 else 'weak' if mastery_score >= 0.35 else 'not-learned'
@@ -170,10 +320,35 @@ def get_knowledge_graph(user: User = Depends(get_current_user), db: Session = De
 def get_study_buddy_state(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     buddy = db.query(StudyBuddyState).filter(StudyBuddyState.user_id == user.id).first()
     if not buddy:
-        buddy = StudyBuddyState(user_id=user.id, streak_days=0, consistency_score=50, mood='focused', nudges=[])
-        db.add(buddy)
-        db.commit()
-        db.refresh(buddy)
+        buddy = StudyBuddyState(user_id=user.id, streak_days=0, consistency_score=0, mood='starting', nudges=[])
+
+    activity = _collect_activity_dates(user.id, db)
+    consistency = activity['learning_consistency']
+    streak = activity['streak']
+
+    if consistency >= 70 or streak >= 5:
+        mood = 'focused'
+    elif consistency >= 30 or streak >= 2:
+        mood = 'building'
+    else:
+        mood = 'starting'
+
+    nudges = []
+    if activity['active_days_last_14'] == 0:
+        nudges.append({'type': 'start', 'message': 'Start with one 20-minute study block today.'})
+    if consistency < 40:
+        nudges.append({'type': 'consistency', 'message': 'Aim for 3 short sessions this week to build momentum.'})
+    if streak > 0:
+        nudges.append({'type': 'streak', 'message': f'Keep your {streak}-day streak alive with one quick review.'})
+
+    buddy.streak_days = streak
+    buddy.consistency_score = consistency
+    buddy.mood = mood
+    buddy.nudges = nudges
+
+    db.add(buddy)
+    db.commit()
+    db.refresh(buddy)
 
     return {
         'streak_days': buddy.streak_days,
@@ -181,3 +356,4 @@ def get_study_buddy_state(user: User = Depends(get_current_user), db: Session = 
         'mood': buddy.mood,
         'nudges': buddy.nudges,
     }
+

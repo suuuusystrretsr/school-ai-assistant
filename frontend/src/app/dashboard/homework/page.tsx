@@ -15,15 +15,24 @@ export default function HomeworkPage() {
   const [result, setResult] = useState<any>(null);
   const [signalMessage, setSignalMessage] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function solveHomework() {
+    if (!question.trim()) {
+      setError('Enter a homework question first.');
+      return;
+    }
+
     setError('');
+    setLoading(true);
     try {
       const data = await postWithAuth('/homework/solve', { question_text: question, explanation_mode: mode });
       setResult(data);
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : 'Failed to solve homework.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -55,7 +64,7 @@ export default function HomeworkPage() {
           ))}
         </div>
         <div className='mt-3 flex gap-2'>
-          <Button onClick={solveHomework}>Solve</Button>
+          <Button onClick={solveHomework} disabled={loading}>{loading ? 'Solving...' : 'Solve'}</Button>
           <Button variant='secondary' onClick={triggerConfusionCheck}>Need Hint Detector</Button>
         </div>
         {error ? <p className='mt-2 text-sm text-rose-700'>{error}</p> : null}
