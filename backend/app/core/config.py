@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     ai_provider: str = Field(default='mock', alias='AI_PROVIDER')
     ai_model: str = Field(default='mock-edu-v1', alias='AI_MODEL')
     openai_api_key: str | None = Field(default=None, alias='OPENAI_API_KEY')
+
+    @property
+    def runtime_database_url(self) -> str:
+        # Render free web services can be strict about writable paths.
+        # If using the relative SQLite path in production, redirect to /tmp.
+        if self.env == 'production' and self.database_url.startswith('sqlite:///./'):
+            return 'sqlite:////tmp/school_ai_assistant.db'
+        return self.database_url
 
 
 @lru_cache
