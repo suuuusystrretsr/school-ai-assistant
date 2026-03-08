@@ -1,4 +1,4 @@
-﻿import json
+import json
 from typing import Any
 from urllib import error, request
 
@@ -379,6 +379,7 @@ class HuggingFaceProvider(MockAIProvider):
         style: str,
         question_count: int,
     ) -> list[dict] | None:
+        token_budget = min(1000, max(550, question_count * 140))
         data = self._ask_json(
             'Generate multiple-choice exam questions with valid options and a single correct answer.',
             (
@@ -386,7 +387,7 @@ class HuggingFaceProvider(MockAIProvider):
                 f'Create exactly {question_count} questions.\n'
                 f'Subject: {subject}\nTopic: {topic}\nDifficulty: {difficulty}\nTeacher style: {style}'
             ),
-            max_new_tokens=1200,
+            max_new_tokens=token_budget,
         )
         if not isinstance(data, dict) or not isinstance(data.get('questions'), list):
             return None
@@ -415,19 +416,3 @@ class HuggingFaceProvider(MockAIProvider):
             )
 
         return out if len(out) >= 3 else None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

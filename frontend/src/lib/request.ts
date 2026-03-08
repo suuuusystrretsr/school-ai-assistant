@@ -18,7 +18,12 @@ async function parseJsonSafe(res: Response): Promise<any> {
   }
 }
 
-export async function requestWithAuth(path: string, method: string = 'GET', body?: Record<string, unknown>): Promise<any> {
+export async function requestWithAuth(
+  path: string,
+  method: string = 'GET',
+  body?: Record<string, unknown>,
+  timeoutMs?: number
+): Promise<any> {
   const token = requireToken();
 
   let res: Response;
@@ -30,7 +35,7 @@ export async function requestWithAuth(path: string, method: string = 'GET', body
         Authorization: `Bearer ${token}`,
       },
       body: body ? JSON.stringify(body) : undefined,
-    });
+    }, timeoutMs);
   } catch {
     throw new Error('Cannot reach backend API. Open Render /health, wait for wake-up, then retry.');
   }
@@ -47,8 +52,8 @@ export async function requestWithAuth(path: string, method: string = 'GET', body
   return data;
 }
 
-export async function postWithAuth(path: string, body: Record<string, unknown>): Promise<any> {
-  return requestWithAuth(path, 'POST', body);
+export async function postWithAuth(path: string, body: Record<string, unknown>, timeoutMs?: number): Promise<any> {
+  return requestWithAuth(path, 'POST', body, timeoutMs);
 }
 
 export async function getWithAuth(path: string): Promise<any> {

@@ -27,6 +27,11 @@ function buildTargetUrl(req: NextRequest, path: string[]): string {
   return `${backendBase}/${joinedPath}${req.nextUrl.search}`;
 }
 
+function getTimeoutMs(path: string): number {
+  if (path === 'exams/generate') return 70000;
+  if (/^exams\/\d+\/submit$/.test(path)) return 30000;
+  return 20000;
+}
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   if (!backendBase) {
     return NextResponse.json({ detail: 'Missing BACKEND_API_URL or NEXT_PUBLIC_API_URL on Vercel.' }, { status: 500 });
@@ -46,9 +51,11 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   headers.delete('content-length');
   headers.delete('accept-encoding');
 
+  const joinedPath = path.join('/');
   const targetUrl = buildTargetUrl(req, path);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeoutMs = getTimeoutMs(joinedPath);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const upstream = await fetch(targetUrl, {
@@ -72,7 +79,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return NextResponse.json({ detail: 'Backend request timed out (15s). Wake Render and retry.' }, { status: 504 });
+      return NextResponse.json({ detail: `Backend request timed out (${timeoutMs}ms). Wake Render and retry.` }, { status: 504 });
     }
     return NextResponse.json({ detail: 'Cannot reach backend service from Vercel function.' }, { status: 502 });
   } finally {

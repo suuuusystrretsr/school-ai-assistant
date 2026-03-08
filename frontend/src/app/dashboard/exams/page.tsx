@@ -76,7 +76,7 @@ export default function ExamsPage() {
         question_count: questionCount,
         teacher_style: teacherStyle,
         custom_teacher_style: customTeacherStyle,
-      });
+      }, 70000);
       if (!data?.exam_id || !Array.isArray(data?.questions)) {
         throw new Error('Invalid exam response from API.');
       }
@@ -126,7 +126,7 @@ export default function ExamsPage() {
       const data = await postWithAuth(`/exams/${exam.exam_id}/submit`, {
         answers,
         confidence_by_question: confidence,
-      });
+      }, 30000);
       setResult(data);
 
       await postWithAuth('/analytics/session-signal', {
