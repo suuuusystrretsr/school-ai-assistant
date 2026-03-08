@@ -1,4 +1,4 @@
-import json
+﻿import json
 from typing import Any
 from urllib import error, request
 
@@ -14,9 +14,12 @@ class HuggingFaceProvider(MockAIProvider):
         self.timeout = max(10, int(self.settings.hf_timeout_seconds))
         self.max_new_tokens = max(128, int(self.settings.hf_max_new_tokens))
         self.endpoint = f'https://api-inference.huggingface.co/models/{self.model_id}' if self.model_id else ''
+        self.last_error = ''
 
     def _invoke_model(self, prompt: str, max_new_tokens: int | None = None) -> str | None:
+        self.last_error = ''
         if not self.api_key or not self.endpoint:
+            self.last_error = 'Missing HF key or model endpoint'
             return None
 
         payload = {
@@ -45,16 +48,26 @@ class HuggingFaceProvider(MockAIProvider):
         try:
             with request.urlopen(req, timeout=self.timeout) as resp:
                 body = resp.read().decode('utf-8', errors='ignore')
-        except (error.URLError, error.HTTPError, TimeoutError):
+        except error.HTTPError as exc:
+            try:
+                detail = exc.read().decode('utf-8', errors='ignore')
+            except Exception:
+                detail = ''
+            self.last_error = f'HTTP {exc.code}: {detail[:220]}'
+            return None
+        except (error.URLError, TimeoutError) as exc:
+            self.last_error = str(exc)
             return None
 
         try:
             data = json.loads(body)
         except json.JSONDecodeError:
+            self.last_error = 'HF returned non-JSON response'
             return None
 
         if isinstance(data, dict):
             if data.get('error'):
+                self.last_error = str(data.get('error'))
                 return None
             if isinstance(data.get('generated_text'), str):
                 return data['generated_text'].strip()
@@ -88,6 +101,7 @@ class HuggingFaceProvider(MockAIProvider):
         try:
             return json.loads(text)
         except json.JSONDecodeError:
+            self.last_error = 'HF returned non-JSON response'
             return None
 
     def _ask_json(self, system: str, user: str, max_new_tokens: int | None = None) -> Any | None:
@@ -393,3 +407,7 @@ class HuggingFaceProvider(MockAIProvider):
             )
 
         return out if len(out) >= 3 else None
+
+
+
+
