@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const configuredBackend = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
+function sanitizeUrl(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw.trim().replace(/^['\"]+|['\"]+$/g, '');
+}
+
+const configuredBackend = sanitizeUrl(process.env.BACKEND_API_URL) || sanitizeUrl(process.env.NEXT_PUBLIC_API_URL);
 const backendBase = configuredBackend.endsWith('/') ? configuredBackend.slice(0, -1) : configuredBackend;
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +21,6 @@ function getBackendRoot(base: string): string {
 function buildTargetUrl(req: NextRequest, path: string[]): string {
   const joinedPath = path.join('/');
 
-  // Convenience health pass-through even when BACKEND_API_URL includes /api/v1.
   if (joinedPath === 'health') {
     return `${getBackendRoot(backendBase)}/health${req.nextUrl.search}`;
   }
@@ -32,6 +36,14 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     );
   }
 
+  const host = req.headers.get('host') || '';
+  if (host && backendBase.includes(host)) {
+    return NextResponse.json(
+      { detail: 'BACKEND_API_URL is pointing to this Vercel app. Set it to Render API URL.' },
+      { status: 500 },
+    );
+  }
+
   const headers = new Headers(req.headers);
   headers.delete('host');
   headers.delete('connection');
@@ -39,7 +51,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   const targetUrl = buildTargetUrl(req, path);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
     const upstream = await fetch(targetUrl, {
@@ -62,7 +74,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return NextResponse.json(
-        { detail: 'Backend request timed out (25s). Wake Render and retry.' },
+        { detail: 'Backend request timed out (15s). Wake Render and retry.' },
         { status: 504 },
       );
     }

@@ -5,18 +5,8 @@ import { FormEvent, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { toReadableError } from '@/lib/error-message';
-
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs = 20000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('Student Name');
@@ -29,7 +19,7 @@ export default function SignupPage() {
     setMessage('Creating account...');
 
     try {
-      const res = await fetchWithTimeout(`${API_URL}/auth/signup`, {
+      const res = await apiFetch('/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, full_name: fullName, password }),
@@ -50,7 +40,7 @@ export default function SignupPage() {
       window.location.href = '/dashboard';
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setMessage('Signup request timed out (20s). Wake Render /health and retry.');
+        setMessage('Signup request timed out. Wake Render /health and retry.');
         return;
       }
       if (err instanceof TypeError) {

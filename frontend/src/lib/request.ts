@@ -1,4 +1,4 @@
-import { API_URL } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { toReadableError } from '@/lib/error-message';
 
 function getToken(): string {
@@ -22,7 +22,7 @@ export async function postWithAuth(path: string, body: Record<string, unknown>):
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await apiFetch(path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

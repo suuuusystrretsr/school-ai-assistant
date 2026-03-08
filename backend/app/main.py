@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -12,7 +12,10 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
 
-origins = [origin.strip() for origin in settings.cors_origins.split(',') if origin.strip()]
+raw_origins = settings.cors_origins or '*'
+origins = [origin.strip().strip('"\'') for origin in raw_origins.split(',') if origin.strip().strip('"\'')]
+if not origins:
+    origins = ['*']
 allow_all = '*' in origins
 
 app.add_middleware(
@@ -36,6 +39,14 @@ def health() -> dict:
     with SessionLocal() as db:
         db.execute(text('SELECT 1'))
     return {'status': 'ok', 'app': settings.app_name}
+@app.get('/')
+def root() -> dict:
+    return {'status': 'ok', 'app': settings.app_name, 'health': '/health', 'docs': '/docs'}
+
+
+@app.get(f"{settings.api_prefix}/health")
+def api_health() -> dict:
+    return health()
 
 
 @app.websocket('/ws/rooms/{room_id}')
