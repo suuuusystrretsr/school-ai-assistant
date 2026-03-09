@@ -63,6 +63,72 @@ const teacherStyles = ['Standard teacher', 'Exam-focused teacher', 'Visual expla
 const gradeOptions = ['3rd Grade', '4th Grade', '5th Grade', '6th Grade', '7th Grade', '8th Grade', '9th Grade', '10th Grade', '11th Grade', '12th Grade'];
 const durationOptions = [15, 30, 45, 60, 75, 90];
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v)).filter((v) => v.trim().length > 0);
+}
+
+function asTimeline(value: unknown): Array<{ step: number; phase: string; minutes: number }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === 'object')
+    .map((item: any, idx) => ({
+      step: Number(item.step) || idx + 1,
+      phase: String(item.phase ?? item.name ?? 'Phase'),
+      minutes: Number(item.minutes) || 0,
+    }));
+}
+
+function normalizeClassroomState(raw: any): ClassroomState {
+  return {
+    session_id: Number(raw?.session_id) || 0,
+    status: String(raw?.status ?? 'in_progress'),
+    setup: {
+      subject: String(raw?.setup?.subject ?? ''),
+      topic: String(raw?.setup?.topic ?? ''),
+      grade_level: String(raw?.setup?.grade_level ?? ''),
+      duration_minutes: Number(raw?.setup?.duration_minutes) || 45,
+      difficulty: String(raw?.setup?.difficulty ?? 'standard'),
+      learning_goal: raw?.setup?.learning_goal ? String(raw.setup.learning_goal) : undefined,
+      teacher_style: String(raw?.setup?.teacher_style ?? 'Standard teacher'),
+      custom_teacher_style: raw?.setup?.custom_teacher_style ? String(raw.setup.custom_teacher_style) : undefined,
+    },
+    lesson_plan: asTimeline(raw?.lesson_plan),
+    current_phase_index: Number(raw?.current_phase_index) || 0,
+    current_phase: raw?.current_phase && typeof raw.current_phase === 'object'
+      ? {
+          name: String(raw.current_phase.name ?? raw.current_phase.phase ?? 'Phase'),
+          minutes: Number(raw.current_phase.minutes) || 0,
+        }
+      : null,
+    adaptive_difficulty: String(raw?.adaptive_difficulty ?? 'standard'),
+    teacher_turn: {
+      phase: raw?.teacher_turn?.phase ? String(raw.teacher_turn.phase) : undefined,
+      message: raw?.teacher_turn?.message ? String(raw.teacher_turn.message) : undefined,
+      question: raw?.teacher_turn?.question ? String(raw.teacher_turn.question) : undefined,
+      feedback: raw?.teacher_turn?.feedback ? String(raw.teacher_turn.feedback) : undefined,
+    },
+    visuals: {
+      slides: asStringArray(raw?.visuals?.slides),
+      diagram: {
+        nodes: asStringArray(raw?.visuals?.diagram?.nodes),
+        edges: asStringArray(raw?.visuals?.diagram?.edges),
+      },
+      timeline: asTimeline(raw?.visuals?.timeline),
+      whiteboard_steps: asStringArray(raw?.visuals?.whiteboard_steps),
+    },
+    transcript: Array.isArray(raw?.transcript) ? raw.transcript : [],
+    transcript_compacted: Boolean(raw?.transcript_compacted),
+    report: {
+      class_summary: raw?.report?.class_summary ? String(raw.report.class_summary) : undefined,
+      key_concepts: asStringArray(raw?.report?.key_concepts),
+      weak_areas: asStringArray(raw?.report?.weak_areas),
+      suggested_next_topic: raw?.report?.suggested_next_topic ? String(raw.report.suggested_next_topic) : undefined,
+      recommended_practice_tasks: asStringArray(raw?.report?.recommended_practice_tasks),
+    },
+  };
+}
+
 export default function ClassroomPage() {
   const [subject, setSubject] = useState('History');
   const [topic, setTopic] = useState('World War II');
@@ -130,7 +196,7 @@ export default function ClassroomPage() {
         teacher_style: teacherStyle === 'Custom' ? 'Custom' : teacherStyle,
         custom_teacher_style: teacherStyle === 'Custom' ? customTeacherStyle : undefined,
       });
-      setSession(data);
+      setSession(normalizeClassroomState(data));
       setStudentResponse('');
       setStatus('Class started. Answer the teacher question to continue.');
       await loadHistory();
@@ -160,7 +226,7 @@ export default function ClassroomPage() {
         student_response: studentResponse,
         self_confidence: confidence,
       });
-      setSession(data);
+      setSession(normalizeClassroomState(data));
       setStudentResponse('');
       setStatus('Response processed. Continue to the next prompt.');
     } catch (err) {
@@ -184,7 +250,7 @@ export default function ClassroomPage() {
       const data = await postWithAuth(`/classroom/${currentSessionId}/end`, {
         reason: 'user-ended-session',
       });
-      setSession(data);
+      setSession(normalizeClassroomState(data));
       setStatus('Class completed. Report generated.');
       await loadHistory();
     } catch (err) {
@@ -200,7 +266,7 @@ export default function ClassroomPage() {
     setStatus('Loading selected class session...');
     try {
       const data = await getWithAuth(`/classroom/${sessionId}`);
-      setSession(data);
+      setSession(normalizeClassroomState(data));
       setStatus('Session loaded.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to open selected session.');
