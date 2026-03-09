@@ -52,3 +52,28 @@ class AIProvider(ABC):
     ) -> list[dict] | None:
         return None
 
+    def generate_classroom_plan(self, payload: dict) -> dict:
+        return {
+            'lesson_plan': [],
+            'teacher_turn': {},
+            'visuals': {},
+            'adaptive_difficulty': payload.get('difficulty', 'standard') if isinstance(payload, dict) else 'standard',
+        }
+
+    def classroom_next_turn(self, payload: dict) -> dict:
+        return {
+            'teacher_turn': {},
+            'adaptive_difficulty': 'standard',
+            'visuals': {},
+            'phase_advanced': False,
+        }
+
+    def generate_classroom_report(self, payload: dict) -> dict:
+        return {
+            'class_summary': 'Class session completed.',
+            'key_concepts': [],
+            'weak_areas': [],
+            'suggested_next_topic': '',
+            'recommended_practice_tasks': [],
+        }
+

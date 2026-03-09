@@ -351,3 +351,146 @@ class MockAIProvider(AIProvider):
         return out
 
 
+
+    # classroom patch marker
+
+
+    def _classroom_sections(self, duration_minutes: int) -> list[dict]:
+        if duration_minutes < 30:
+            intro = max(2, round(duration_minutes * 0.14))
+            core = max(4, round(duration_minutes * 0.28))
+            interactive = max(3, round(duration_minutes * 0.24))
+            practice = max(3, round(duration_minutes * 0.22))
+            summary = max(2, duration_minutes - (intro + core + interactive + practice))
+            return [
+                {'name': 'Introduction', 'minutes': intro},
+                {'name': 'Core Explanation', 'minutes': core},
+                {'name': 'Interactive Questions', 'minutes': interactive},
+                {'name': 'Practice Problems', 'minutes': practice},
+                {'name': 'Summary and Key Takeaways', 'minutes': summary},
+            ]
+        if duration_minutes < 50:
+            intro = max(4, round(duration_minutes * 0.12))
+            core = max(8, round(duration_minutes * 0.24))
+            walkthrough = max(7, round(duration_minutes * 0.2))
+            interactive = max(6, round(duration_minutes * 0.2))
+            practice = max(4, round(duration_minutes * 0.14))
+            summary = max(3, duration_minutes - (intro + core + walkthrough + interactive + practice))
+            return [
+                {'name': 'Introduction', 'minutes': intro},
+                {'name': 'Core Explanation', 'minutes': core},
+                {'name': 'Example Walkthrough', 'minutes': walkthrough},
+                {'name': 'Interactive Questions', 'minutes': interactive},
+                {'name': 'Practice Problems', 'minutes': practice},
+                {'name': 'Summary and Key Takeaways', 'minutes': summary},
+            ]
+        return [
+            {'name': 'Introduction', 'minutes': 6},
+            {'name': 'Core Explanation', 'minutes': 12},
+            {'name': 'Example Walkthrough', 'minutes': 12},
+            {'name': 'Interactive Questions', 'minutes': 12},
+            {'name': 'Practice Problems', 'minutes': 8},
+            {'name': 'Quick Quiz', 'minutes': 5},
+            {'name': 'Summary and Key Takeaways', 'minutes': max(3, duration_minutes - 55)},
+        ]
+
+    def generate_classroom_plan(self, payload: dict) -> dict:
+        subject = str(payload.get('subject') or 'General')
+        topic = str(payload.get('topic') or subject)
+        grade = str(payload.get('grade_level') or 'Middle School')
+        duration = int(payload.get('duration_minutes') or 45)
+        difficulty = str(payload.get('difficulty') or 'standard').lower()
+        goal = str(payload.get('learning_goal') or 'first time learning')
+        style = str(payload.get('custom_teacher_style') or payload.get('teacher_style') or 'Standard teacher')
+
+        lesson_plan = self._classroom_sections(duration)
+        teacher_turn = {
+            'phase': lesson_plan[0]['name'],
+            'message': f'Welcome class. Today in {subject} we will learn {topic}. Goal: {goal}.',
+            'question': f'What do you already know about {topic}?',
+            'feedback': f'I will teach this at a {difficulty} level for {grade}.',
+        }
+        visuals = {
+            'slides': [f'{subject}: {topic}', f'Goal: {goal}', f'Teacher style: {style}'],
+            'diagram': {
+                'nodes': [f'{topic} concept', f'{topic} example', f'{topic} review'],
+                'edges': ['concept -> example', 'example -> review'],
+            },
+            'timeline': [{'step': i + 1, 'phase': p['name'], 'minutes': p['minutes']} for i, p in enumerate(lesson_plan)],
+            'whiteboard_steps': [f'Define {topic}', f'Solve one {topic} example', 'Explain each step'],
+        }
+        return {
+            'lesson_plan': lesson_plan,
+            'teacher_turn': teacher_turn,
+            'visuals': visuals,
+            'adaptive_difficulty': difficulty,
+        }
+
+    def classroom_next_turn(self, payload: dict) -> dict:
+        lesson_plan = payload.get('lesson_plan') if isinstance(payload.get('lesson_plan'), list) else []
+        index = int(payload.get('current_phase_index') or 0)
+        adaptive = str(payload.get('adaptive_difficulty') or 'standard').lower()
+        topic = str(payload.get('topic') or 'this topic')
+        confidence = payload.get('self_confidence')
+        was_correct = bool(payload.get('was_correct'))
+
+        if not was_correct or (isinstance(confidence, int) and confidence < 45):
+            adaptive = 'simplified'
+            feedback = f'Let us simplify {topic} with one more example.'
+        elif was_correct and isinstance(confidence, int) and confidence >= 75:
+            adaptive = 'advanced'
+            feedback = f'Great work. We will go deeper into {topic}.'
+        else:
+            feedback = f'Good effort. We continue building {topic}.'
+        phase_advanced = False
+        if (was_correct or (isinstance(confidence, int) and confidence >= 60)) and lesson_plan and index < len(lesson_plan) - 1:
+            index += 1
+            phase_advanced = True
+
+        phase_name = lesson_plan[index]['name'] if lesson_plan else 'Core Explanation'
+        question = f'{phase_name}: explain one key idea about {topic}.'
+        if adaptive == 'advanced':
+            question = f'{phase_name}: why does {topic} work, and when does it fail?'
+
+        teacher_turn = {
+            'phase': phase_name,
+            'message': f'{feedback} Current phase: {phase_name}.',
+            'question': question,
+            'feedback': feedback,
+        }
+        visuals = {
+            'slides': [f'Phase: {phase_name}', f'Adaptive level: {adaptive}', f'Focus: {topic}'],
+            'diagram': {
+                'nodes': [f'{topic} idea', f'{topic} application', f'{topic} check'],
+                'edges': ['idea -> application', 'application -> check'],
+            },
+            'timeline': [{'step': i + 1, 'phase': p.get('name'), 'minutes': p.get('minutes')} for i, p in enumerate(lesson_plan)],
+            'whiteboard_steps': [f'Restate {topic}', f'Work one step on {topic}', 'Check the reasoning'],
+        }
+
+        return {
+            'teacher_turn': teacher_turn,
+            'adaptive_difficulty': adaptive,
+            'visuals': visuals,
+            'phase_advanced': phase_advanced,
+            'current_phase_index': index,
+        }
+
+    def generate_classroom_report(self, payload: dict) -> dict:
+        topic = str(payload.get('topic') or 'the topic')
+        transcript = payload.get('transcript') if isinstance(payload.get('transcript'), list) else []
+        struggle = sum(
+            1
+            for turn in transcript
+            if isinstance(turn, dict)
+            and turn.get('role') == 'teacher'
+            and 'simplify' in str(turn.get('message', '')).lower()
+        )
+        weak = [f'{topic} application'] if struggle else [f'{topic} higher-level reasoning']
+        return {
+            'class_summary': f'Completed guided classroom session on {topic}.',
+            'key_concepts': [f'Core idea of {topic}', f'Applied steps for {topic}', f'Self-check strategy for {topic}'],
+            'weak_areas': weak,
+            'suggested_next_topic': f'{topic} mixed practice',
+            'recommended_practice_tasks': [f'10-minute recall on {topic}', f'Two medium {topic} problems', 'One explain-your-steps reflection'],
+        }

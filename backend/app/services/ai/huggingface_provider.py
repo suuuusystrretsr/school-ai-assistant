@@ -581,3 +581,69 @@ class HuggingFaceProvider(MockAIProvider):
 
 
 
+
+    def generate_classroom_plan(self, payload: dict) -> dict:
+        fallback = super().generate_classroom_plan(payload)
+        data = self._ask_json(
+            'Generate a teacher-led class plan with visuals.',
+            (
+                'Return object with keys: lesson_plan(list[{name,minutes}]), teacher_turn({phase,message,question,feedback}), '
+                'visuals({slides,diagram,timeline,whiteboard_steps}), adaptive_difficulty(str).\n'
+                f'Payload: {json.dumps(payload)}'
+            ),
+            max_new_tokens=800,
+        )
+        if not isinstance(data, dict):
+            return fallback
+        if not isinstance(data.get('lesson_plan'), list) or not isinstance(data.get('teacher_turn'), dict):
+            return fallback
+        return {
+            'lesson_plan': data.get('lesson_plan') or fallback['lesson_plan'],
+            'teacher_turn': data.get('teacher_turn') or fallback['teacher_turn'],
+            'visuals': data.get('visuals') if isinstance(data.get('visuals'), dict) else fallback['visuals'],
+            'adaptive_difficulty': str(data.get('adaptive_difficulty') or fallback['adaptive_difficulty']),
+        }
+
+    def classroom_next_turn(self, payload: dict) -> dict:
+        fallback = super().classroom_next_turn(payload)
+        data = self._ask_json(
+            'Act like a real teacher continuing an in-progress class.',
+            (
+                'Return object with keys: teacher_turn({phase,message,question,feedback}), adaptive_difficulty(str), '
+                'visuals(object), phase_advanced(bool), current_phase_index(int).\n'
+                f'Payload: {json.dumps(payload)}'
+            ),
+            max_new_tokens=700,
+        )
+        if not isinstance(data, dict):
+            return fallback
+        if not isinstance(data.get('teacher_turn'), dict):
+            return fallback
+        return {
+            'teacher_turn': data.get('teacher_turn') or fallback['teacher_turn'],
+            'adaptive_difficulty': str(data.get('adaptive_difficulty') or fallback['adaptive_difficulty']),
+            'visuals': data.get('visuals') if isinstance(data.get('visuals'), dict) else fallback['visuals'],
+            'phase_advanced': bool(data.get('phase_advanced')),
+            'current_phase_index': int(data.get('current_phase_index') or fallback.get('current_phase_index', 0)),
+        }
+
+    def generate_classroom_report(self, payload: dict) -> dict:
+        fallback = super().generate_classroom_report(payload)
+        data = self._ask_json(
+            'Generate end-of-class report and next action plan.',
+            (
+                'Return object with keys: class_summary(str), key_concepts(list[str]), weak_areas(list[str]), '
+                'suggested_next_topic(str), recommended_practice_tasks(list[str]).\n'
+                f'Payload: {json.dumps(payload)}'
+            ),
+            max_new_tokens=600,
+        )
+        if not isinstance(data, dict):
+            return fallback
+        return {
+            'class_summary': str(data.get('class_summary') or fallback['class_summary']),
+            'key_concepts': self._list_of_strings(data.get('key_concepts')) or fallback['key_concepts'],
+            'weak_areas': self._list_of_strings(data.get('weak_areas')) or fallback['weak_areas'],
+            'suggested_next_topic': str(data.get('suggested_next_topic') or fallback['suggested_next_topic']),
+            'recommended_practice_tasks': self._list_of_strings(data.get('recommended_practice_tasks')) or fallback['recommended_practice_tasks'],
+        }

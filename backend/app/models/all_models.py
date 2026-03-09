@@ -1,4 +1,5 @@
 from app.models.analytics import AnalyticsSnapshot
+from app.models.classroom import ClassroomSession
 from app.models.exam import ExamQuestion, ExamSimulation
 from app.models.flashcard import Flashcard, FlashcardDeck
 from app.models.homework import GeneratedSolution, HomeworkRequest, PracticeSet
@@ -28,4 +29,6 @@ __all__ = [
     'RoomMessage',
     'RoomInvite',
     'PlannerTask',
+    'ClassroomSession',
 ]
+

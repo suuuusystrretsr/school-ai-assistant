@@ -14,6 +14,7 @@ const nav = [
   { href: '/dashboard/tutor', label: 'AI Tutor' },
   { href: '/dashboard/planner', label: 'Study Planner' },
   { href: '/dashboard/exams', label: 'Exam Simulator' },
+  { href: '/dashboard/classroom', label: 'Classroom' },
   { href: '/dashboard/analytics', label: 'Analytics' },
   { href: '/dashboard/study-room', label: 'Study Rooms' },
   { href: '/dashboard/settings', label: 'Settings' },
@@ -70,3 +71,4 @@ export function DashboardSidebar({ onAuthStateChange }: Props) {
     </aside>
   );
 }
+

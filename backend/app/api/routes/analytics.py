@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.analytics import AnalyticsSnapshot
+from app.models.classroom import ClassroomSession
 from app.models.exam import ExamSimulation
 from app.models.flashcard import FlashcardDeck
 from app.models.homework import HomeworkRequest
@@ -135,6 +136,7 @@ def _build_dashboard_payload(user: User, db: Session) -> dict:
     homework_count = db.query(HomeworkRequest.id).filter(HomeworkRequest.user_id == user.id).count()
     flashcard_count = db.query(FlashcardDeck.id).filter(FlashcardDeck.user_id == user.id).count()
     planner_count = db.query(PlannerTask.id).filter(PlannerTask.user_id == user.id).count()
+    classroom_count = db.query(ClassroomSession.id).filter(ClassroomSession.user_id == user.id).count()
 
     retention_forecast = {
         'high': high,
@@ -148,6 +150,7 @@ def _build_dashboard_payload(user: User, db: Session) -> dict:
         'homework_solved': homework_count,
         'flashcard_decks': flashcard_count,
         'study_plans_generated': planner_count,
+        'class_sessions': classroom_count,
         'active_days_last_14': activity['active_days_last_14'],
         'last_7_days': activity['recent_activity'],
     }
@@ -878,8 +881,4 @@ def intelligence(user: User = Depends(get_current_user), db: Session = Depends(g
         study_identity_model=identity,
         next_best_action=next_best_action,
     )
-
-
-
-
 
